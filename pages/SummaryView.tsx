@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Share2, Download, ArrowLeft, Copy, Lightbulb, Microscope, FileText, Target } from 'lucide-react';
 import { PaperSummary } from '../types';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../context/AuthContext';
 
 interface Paper {
     id: string;
@@ -14,32 +15,53 @@ interface Paper {
 export const SummaryView: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [paper, setPaper] = useState<Paper | null>(null);
     const [summary, setSummary] = useState<PaperSummary | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
             if (!id) return;
 
+            if (!user) {
+                setError('Please log in to view this summary');
+                setLoading(false);
+                return;
+            }
+
             // Fetch paper
-            const { data: paperData } = await supabase
+            const { data: paperData, error: paperError } = await supabase
                 .from('papers')
                 .select('*')
                 .eq('id', id)
                 .single();
 
+            if (paperError) {
+                console.error('Error fetching paper:', paperError);
+                setError('Unable to load paper');
+                setLoading(false);
+                return;
+            }
+
             if (paperData) {
                 setPaper(paperData);
 
                 // Fetch summary
-                const { data: summaryData } = await supabase
+                const { data: summaryData, error: summaryError } = await supabase
                     .from('summaries')
                     .select('*')
                     .eq('paper_id', id)
                     .single();
 
-                if (summaryData) {
+                if (summaryError) {
+                    console.error('Error fetching summary:', summaryError);
+                    // Summary might not exist yet for pending/processing papers
+                    if (summaryError.code !== 'PGRST116') {
+                        setError('Unable to load summary');
+                    }
+                } else if (summaryData) {
                     setSummary(summaryData);
                 }
             }
@@ -48,7 +70,7 @@ export const SummaryView: React.FC = () => {
 
         fetchData();
         window.scrollTo(0, 0);
-    }, [id]);
+    }, [id, user]);
 
     if (loading) {
         return (
@@ -58,11 +80,28 @@ export const SummaryView: React.FC = () => {
         );
     }
 
+    if (error) {
+        return (
+            <div className="max-w-6xl mx-auto py-20 text-center">
+                <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-gray-500">{error}</p>
+                <button
+                    onClick={() => navigate('/')}
+                    className="mt-4 text-sage hover:text-sage-dark transition-colors"
+                >
+                    ← Back to Dashboard
+                </button>
+            </div>
+        );
+    }
+
     if (!paper || !summary) {
         return (
             <div className="max-w-6xl mx-auto py-20 text-center">
                 <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">Summary not found</p>
+                <p className="text-gray-500">
+                    {paper && !summary ? 'Summary is being generated...' : 'Summary not found'}
+                </p>
                 <button
                     onClick={() => navigate('/')}
                     className="mt-4 text-sage hover:text-sage-dark transition-colors"

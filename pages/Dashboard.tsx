@@ -86,12 +86,17 @@ export const Dashboard: React.FC = () => {
     const { error } = await supabase
       .from('papers')
       .delete()
-      .eq('id', paperId);
+      .eq('id', paperId)
+      .eq('user_id', user?.id);
 
-    if (!error) {
-      setPapers(papers.filter(p => p.id !== paperId));
-      setTotalPapers(prev => prev - 1);
+    if (error) {
+      console.error('Error deleting paper:', error);
+      alert('Failed to delete paper. Please try again.');
+      return;
     }
+
+    setPapers(papers.filter(p => p.id !== paperId));
+    setTotalPapers(prev => prev - 1);
   };
 
   const loadDemoPaper = async () => {
