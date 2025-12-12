@@ -8,10 +8,36 @@ export interface UserProfile {
   email: string;
   avatar_url: string;
   department?: string;
+  affiliation?: string;
+  subscription_tier?: string;
+  paper_count?: number;
+  subscription_started_at?: string;
+}
+
+export interface SubscriptionTier {
+  id: string;
+  name: string;
+  paper_limit: number | null;
+  price_monthly: number;
+  features: {
+    storage: string;
+    support: string;
+    priority_processing?: boolean;
+    api_access?: boolean;
+  };
+}
+
+export interface Folder {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
 }
 
 export interface Paper {
   id: string;
+  user_id?: string;
+  folder_id?: string | null;
   title: string;
   authors: string[];
   upload_date: string;

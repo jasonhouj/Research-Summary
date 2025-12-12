@@ -1,22 +1,113 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { SummaryView } from './pages/SummaryView';
+import { AuthPage } from './pages/AuthPage';
+import { MyPapers } from './pages/MyPapers';
+import { ResetPassword } from './pages/ResetPassword';
+import { Settings } from './pages/Settings';
+
+// Protected Route wrapper
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-offwhite flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-sage border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Public Route wrapper (redirects to home if already logged in)
+const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-offwhite flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-sage border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const AppRoutes: React.FC = () => {
+  return (
+    <Routes>
+      <Route path="/auth" element={
+        <PublicRoute>
+          <AuthPage />
+        </PublicRoute>
+      } />
+      <Route path="/" element={
+        <ProtectedRoute>
+          <Layout>
+            <Dashboard />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/paper/:id" element={
+        <ProtectedRoute>
+          <Layout>
+            <SummaryView />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/papers" element={
+        <ProtectedRoute>
+          <Layout>
+            <MyPapers />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/saved" element={
+        <ProtectedRoute>
+          <Layout>
+            <div className="text-center py-20 text-gray-400">Saved Summaries Placeholder</div>
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Layout>
+            <Settings />
+          </Layout>
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
+};
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/paper/:id" element={<SummaryView />} />
-          <Route path="/papers" element={<div className="text-center py-20 text-gray-400">Paper Library View Placeholder</div>} />
-          <Route path="/saved" element={<div className="text-center py-20 text-gray-400">Saved Summaries Placeholder</div>} />
-          <Route path="/settings" element={<div className="text-center py-20 text-gray-400">Settings Placeholder</div>} />
-        </Routes>
-      </Layout>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </AuthProvider>
   );
 };
 

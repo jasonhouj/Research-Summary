@@ -9,12 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.1",
+    "framer-motion": "^12.23.26",
     "lucide-react": "^0.559.0",
+    "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-router-dom": "^7.10.1",
-    "react": "^19.2.1",
-    "recharts": "^3.5.1",
-    "framer-motion": "^12.23.26"
+    "recharts": "^3.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
