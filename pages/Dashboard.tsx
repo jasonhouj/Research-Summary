@@ -86,11 +86,15 @@ export const Dashboard: React.FC = () => {
     const { error } = await supabase
       .from('papers')
       .delete()
-      .eq('id', paperId);
+      .eq('id', paperId)
+      .eq('user_id', user?.id);
 
     if (!error) {
       setPapers(papers.filter(p => p.id !== paperId));
       setTotalPapers(prev => prev - 1);
+    } else {
+      console.error('Error deleting paper:', error);
+      alert('Failed to delete paper. Please try again.');
     }
   };
 
@@ -133,11 +137,17 @@ export const Dashboard: React.FC = () => {
         ]
       };
 
-      const { error: summaryError } = await supabase.from('summaries').insert(demoSummary);
+      const { data: summaryData, error: summaryError } = await supabase
+        .from('summaries')
+        .insert(demoSummary)
+        .select()
+        .single();
 
       if (summaryError) {
         console.error('Error inserting summary:', summaryError);
-        alert('Paper created but summary failed. Please run the SQL migration in supabase/005_fix_summaries_rls.sql');
+        alert('Paper created but summary failed. Please check the console for details or run the SQL migration in supabase/005_fix_summaries_rls.sql');
+      } else {
+        console.log('Demo paper and summary created successfully');
       }
 
       // Refresh the papers list

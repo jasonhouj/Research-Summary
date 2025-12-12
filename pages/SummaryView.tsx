@@ -23,24 +23,35 @@ export const SummaryView: React.FC = () => {
             if (!id) return;
 
             // Fetch paper
-            const { data: paperData } = await supabase
+            const { data: paperData, error: paperError } = await supabase
                 .from('papers')
                 .select('*')
                 .eq('id', id)
                 .single();
 
+            if (paperError) {
+                console.error('Error fetching paper:', paperError);
+            }
+
             if (paperData) {
                 setPaper(paperData);
 
                 // Fetch summary
-                const { data: summaryData } = await supabase
+                const { data: summaryData, error: summaryError } = await supabase
                     .from('summaries')
                     .select('*')
                     .eq('paper_id', id)
                     .single();
 
+                if (summaryError) {
+                    console.error('Error fetching summary:', summaryError);
+                }
+
                 if (summaryData) {
+                    console.log('Summary data:', summaryData);
                     setSummary(summaryData);
+                } else {
+                    console.warn('No summary found for paper:', id);
                 }
             }
             setLoading(false);
