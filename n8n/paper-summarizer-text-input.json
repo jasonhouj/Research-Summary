@@ -1,0 +1,171 @@
+{
+  "name": "Paper Summarizer (Text Input)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-paper",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive Text",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "paper-summarizer-text"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse sections from the pre-extracted PDF text\nconst text = $input.first().json.text || '';\nconst fileName = $input.first().json.fileName || 'Unknown';\n\nconsole.log('Received text length:', text.length);\n\n// Function to extract section content between headers\nfunction extractSection(text, sectionNames, nextSectionNames) {\n  for (const name of sectionNames) {\n    const patterns = [\n      new RegExp(`(?:^|\\\\n)\\\\s*(?:\\\\d+\\\\.?\\\\s*)?${name}[:\\\\s]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n\\\\s*(?:\\\\d+\\\\.?\\\\s*)?(?:${nextSectionNames.join('|')})[:\\\\s]*\\\\n|$)`, 'i'),\n      new RegExp(`(?:^|\\\\n)${name}[:\\\\s]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n(?:${nextSectionNames.join('|')})[:\\\\s]*\\\\n|$)`, 'i'),\n      new RegExp(`${name}[:\\\\s]*([\\\\s\\\\S]*?)(?=(?:${nextSectionNames.join('|')})|$)`, 'i')\n    ];\n    \n    for (const pattern of patterns) {\n      const match = text.match(pattern);\n      if (match && match[1] && match[1].trim().length > 50) {\n        return match[1].trim().substring(0, 8000);\n      }\n    }\n  }\n  return null;\n}\n\n// Extract title from first line\nlet title = fileName.replace('.pdf', '').replace(/_/g, ' ');\nconst titleMatch = text.match(/^([^\\n]{10,150})/m);\nif (titleMatch) title = titleMatch[1].trim();\n\n// Extract abstract\nlet abstract = 'Abstract not found';\nconst abstractMatch = text.match(/abstract[:\\s]*\\n?([\\s\\S]{100,3000}?)(?=\\n\\s*(?:keywords|introduction|background|1\\.))/i);\nif (abstractMatch) abstract = abstractMatch[1].trim();\n\nconst sectionConfig = {\n  introduction: {\n    names: ['introduction', 'background', 'overview', 'literature review'],\n    next: ['method', 'methods', 'methodology', 'materials and methods', 'experimental', '2\\\\.']\n  },\n  methods: {\n    names: ['methods', 'method', 'methodology', 'materials and methods', 'experimental', 'study design'],\n    next: ['results', 'result', 'findings', 'outcomes', '3\\\\.']\n  },\n  results: {\n    names: ['results', 'result', 'findings', 'outcomes', 'observations'],\n    next: ['discussion', 'analysis', 'interpretation', '4\\\\.']\n  },\n  discussion: {\n    names: ['discussion', 'analysis', 'interpretation', 'implications'],\n    next: ['conclusion', 'conclusions', 'summary', '5\\\\.']\n  },\n  conclusion: {\n    names: ['conclusion', 'conclusions', 'summary', 'concluding remarks'],\n    next: ['references', 'bibliography', 'acknowledgment', 'conflict']\n  },\n  conflictOfInterest: {\n    names: ['conflict of interest', 'conflicts of interest', 'competing interests', 'disclosures'],\n    next: ['references', 'bibliography', 'acknowledgment', 'funding']\n  }\n};\n\nconst sections = {};\nfor (const [key, config] of Object.entries(sectionConfig)) {\n  sections[key] = extractSection(text, config.names, config.next);\n}\n\nreturn [{\n  json: {\n    title,\n    abstract,\n    sections: {\n      introduction: sections.introduction || 'Section not found.',\n      methods: sections.methods || 'Section not found.',\n      results: sections.results || 'Section not found.',\n      discussion: sections.discussion || 'Section not found.',\n      conclusion: sections.conclusion || 'Section not found.',\n      conflictOfInterest: sections.conflictOfInterest || 'No conflict of interest section found.'\n    },\n    sectionsFound: {\n      introduction: !!sections.introduction,\n      methods: !!sections.methods,\n      results: !!sections.results,\n      discussion: !!sections.discussion,\n      conclusion: !!sections.conclusion,\n      conflictOfInterest: !!sections.conflictOfInterest\n    },\n    fullTextLength: text.length\n  }\n}];"
+      },
+      "id": "parse-sections",
+      "name": "Parse Paper Sections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst sections = data.sections;\nconst sectionsFound = data.sectionsFound;\n\nconst prompts = [\n  { key: 'introduction', name: 'Introduction', found: sectionsFound.introduction,\n    prompt: sectionsFound.introduction ? `Summarize this Introduction in 2-3 paragraphs (150-250 words). Focus on research problem, objectives, significance.\\n\\n${sections.introduction}` : 'Respond: Introduction not found.' },\n  { key: 'methods', name: 'Methods', found: sectionsFound.methods,\n    prompt: sectionsFound.methods ? `Summarize this Methods section in 2-3 paragraphs (150-250 words). Focus on study design, participants, procedures, analysis.\\n\\n${sections.methods}` : 'Respond: Methods not found.' },\n  { key: 'results', name: 'Results', found: sectionsFound.results,\n    prompt: sectionsFound.results ? `Summarize this Results section in 2-3 paragraphs (150-250 words). Focus on main findings, statistics, patterns.\\n\\n${sections.results}` : 'Respond: Results not found.' },\n  { key: 'discussion', name: 'Discussion', found: sectionsFound.discussion,\n    prompt: sectionsFound.discussion ? `Summarize this Discussion in 2-3 paragraphs (150-250 words). Focus on interpretation, implications, limitations.\\n\\n${sections.discussion}` : 'Respond: Discussion not found.' },\n  { key: 'conclusion', name: 'Conclusion', found: sectionsFound.conclusion,\n    prompt: sectionsFound.conclusion ? `Summarize this Conclusion in 1-2 paragraphs (75-150 words). Focus on main takeaways, implications.\\n\\n${sections.conclusion}` : 'Respond: Conclusion not found.' },\n  { key: 'conflictOfInterest', name: 'Conflict of Interest', found: sectionsFound.conflictOfInterest,\n    prompt: sectionsFound.conflictOfInterest ? `Extract conflict of interest info in 2-4 sentences. Include declared conflicts, funding.\\n\\n${sections.conflictOfInterest}` : 'Respond: No conflict of interest found.' }\n];\n\nconst metadata = { title: data.title, abstract: data.abstract, fullTextLength: data.fullTextLength, sectionsFound };\n\nreturn prompts.map(p => ({ json: { ...p, metadata } }));"
+      },
+      "id": "prepare-prompts",
+      "name": "Prepare AI Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-sections",
+      "name": "Loop Over Sections",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.prompt }}",
+        "options": {}
+      },
+      "id": "basic-llm-chain",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-1.5-flash",
+        "options": {
+          "temperature": 0.3,
+          "maxOutputTokens": 500
+        }
+      },
+      "id": "gemini-model",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1120, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $('Loop Over Sections').first().json;\nconst aiResponse = $input.first().json;\n\nlet summary = aiResponse.text || aiResponse.response?.text || JSON.stringify(aiResponse);\n\nreturn [{ json: { key: inputData.key, name: inputData.name, summary, found: inputData.found, metadata: inputData.metadata } }];"
+      },
+      "id": "extract-response",
+      "name": "Extract AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-summaries",
+      "name": "Aggregate All Summaries",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allData = $input.first().json.data;\n\nconst response = {\n  success: true,\n  paper: { title: '', abstract: '' },\n  summaries: { introduction: 'Not available', methods: 'Not available', results: 'Not available', discussion: 'Not available', conclusion: 'Not available', conflictOfInterest: 'Not available' },\n  sectionsFound: { introduction: false, methods: false, results: false, discussion: false, conclusion: false, conflictOfInterest: false },\n  metadata: { generatedAt: new Date().toISOString(), sectionsProcessed: 0, sectionsSuccessfullyFound: 0, fullTextLength: 0, aiModel: 'Google Gemini 1.5 Flash' }\n};\n\nfor (const item of allData) {\n  if (item.key && item.summary) {\n    response.summaries[item.key] = item.summary;\n    response.sectionsFound[item.key] = item.found || false;\n    response.metadata.sectionsProcessed++;\n    if (item.found) response.metadata.sectionsSuccessfullyFound++;\n  }\n  if (item.metadata && !response.paper.title) {\n    response.paper.title = item.metadata.title || 'Unknown';\n    response.paper.abstract = item.metadata.abstract || 'Not found';\n    response.metadata.fullTextLength = item.metadata.fullTextLength || 0;\n  }\n}\n\nreturn [{ json: response }];"
+      },
+      "id": "compile-response",
+      "name": "Compile Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Paper Summarizer (Text Input)\n\n**This workflow receives pre-extracted text via JSON**\n\nExpected input:\n```json\n{\n  \"text\": \"Full paper text...\",\n  \"fileName\": \"paper.pdf\"\n}\n```\n\n**IMPORTANT:** Connect the Google Gemini Chat Model to the Basic LLM Chain's AI input (the small connector below the node).",
+        "height": 220,
+        "width": 350,
+        "color": 4
+      },
+      "id": "sticky-note",
+      "name": "Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 60]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Text": {
+      "main": [[{ "node": "Parse Paper Sections", "type": "main", "index": 0 }]]
+    },
+    "Parse Paper Sections": {
+      "main": [[{ "node": "Prepare AI Prompts", "type": "main", "index": 0 }]]
+    },
+    "Prepare AI Prompts": {
+      "main": [[{ "node": "Loop Over Sections", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Sections": {
+      "main": [
+        [{ "node": "Basic LLM Chain", "type": "main", "index": 0 }],
+        [{ "node": "Aggregate All Summaries", "type": "main", "index": 0 }]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [[{ "node": "Extract AI Response", "type": "main", "index": 0 }]]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [[{ "node": "Basic LLM Chain", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Extract AI Response": {
+      "main": [[{ "node": "Loop Over Sections", "type": "main", "index": 0 }]]
+    },
+    "Aggregate All Summaries": {
+      "main": [[{ "node": "Compile Final Response", "type": "main", "index": 0 }]]
+    },
+    "Compile Final Response": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

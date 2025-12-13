@@ -1,0 +1,292 @@
+{
+  "name": "Research Paper Summary Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-paper",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Paper Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "research-paper-upload"
+    },
+    {
+      "parameters": {
+        "operation": "extractFromFile",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "id": "pdf-extract",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a scientific research paper analyzer. Extract the following information from this research paper and return it as valid JSON.\n\nExtract:\n1. title: The paper's title\n2. authors: Array of author names\n3. hypothesis: The main research hypothesis or research question (2-3 sentences)\n4. introduction: Summary of the introduction/background section (3-4 sentences)\n5. methodology: Summary of the methods used (3-4 sentences)\n6. results: Array of key results, each with:\n   - label: Short title for the result\n   - content: Description of the finding (2-3 sentences)\n   - discussion: Analysis/implications of this result (2-3 sentences)\n7. conclusion: Summary of conclusions (3-4 sentences)\n8. conflict_of_interest: Any disclosed conflicts of interest, funding sources, or affiliations that could represent potential bias. If none found, state \"No conflicts of interest were disclosed.\"\n9. key_findings: Array of 4-6 short bullet points (each 5-10 words)\n\nRespond ONLY with valid JSON, no markdown or explanation.\n\nPaper text:\n{{ $json.data }}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "openai-analyze",
+      "name": "AI - Analyze Paper",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [680, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the AI response and prepare data for Supabase\nconst aiResponse = $input.first().json;\nlet parsed;\n\ntry {\n  // Handle if response is already an object or needs parsing\n  if (typeof aiResponse.message?.content === 'string') {\n    // Remove markdown code blocks if present\n    let content = aiResponse.message.content;\n    content = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    parsed = JSON.parse(content);\n  } else if (typeof aiResponse.text === 'string') {\n    let content = aiResponse.text;\n    content = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    parsed = JSON.parse(content);\n  } else {\n    parsed = aiResponse;\n  }\n} catch (e) {\n  throw new Error('Failed to parse AI response: ' + e.message);\n}\n\n// Get user_id from webhook payload\nconst userId = $('Webhook - Paper Upload').first().json.body?.user_id;\nconst originalFilename = $('Webhook - Paper Upload').first().json.body?.filename || 'unknown.pdf';\n\nif (!userId) {\n  throw new Error('user_id is required in the webhook payload');\n}\n\nreturn {\n  json: {\n    paper: {\n      user_id: userId,\n      title: parsed.title || 'Untitled Paper',\n      authors: parsed.authors || ['Unknown Author'],\n      upload_date: new Date().toISOString(),\n      status: 'completed',\n      original_filename: originalFilename\n    },\n    summary: {\n      hypothesis: parsed.hypothesis || '',\n      introduction: parsed.introduction || '',\n      methodology: parsed.methodology || '',\n      results: parsed.results || [],\n      conclusion: parsed.conclusion || '',\n      conflict_of_interest: parsed.conflict_of_interest || 'No conflicts of interest were disclosed.',\n      key_findings: parsed.key_findings || []\n    }\n  }\n};"
+      },
+      "id": "code-prepare-data",
+      "name": "Prepare Data for Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "papers",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json.paper.user_id }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.paper.title }}"
+            },
+            {
+              "fieldId": "authors",
+              "fieldValue": "={{ $json.paper.authors }}"
+            },
+            {
+              "fieldId": "upload_date",
+              "fieldValue": "={{ $json.paper.upload_date }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.paper.status }}"
+            },
+            {
+              "fieldId": "original_filename",
+              "fieldValue": "={{ $json.paper.original_filename }}"
+            }
+          ]
+        },
+        "options": {
+          "returnData": true
+        }
+      },
+      "id": "supabase-insert-paper",
+      "name": "Supabase - Insert Paper",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine paper ID with summary data\nconst paperData = $input.first().json;\nconst summaryData = $('Prepare Data for Supabase').first().json.summary;\n\nreturn {\n  json: {\n    paper_id: paperData.id,\n    hypothesis: summaryData.hypothesis,\n    introduction: summaryData.introduction,\n    methodology: summaryData.methodology,\n    results: summaryData.results,\n    conclusion: summaryData.conclusion,\n    conflict_of_interest: summaryData.conflict_of_interest,\n    key_findings: summaryData.key_findings\n  }\n};"
+      },
+      "id": "code-prepare-summary",
+      "name": "Prepare Summary with Paper ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "summaries",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "paper_id",
+              "fieldValue": "={{ $json.paper_id }}"
+            },
+            {
+              "fieldId": "hypothesis",
+              "fieldValue": "={{ $json.hypothesis }}"
+            },
+            {
+              "fieldId": "introduction",
+              "fieldValue": "={{ $json.introduction }}"
+            },
+            {
+              "fieldId": "methodology",
+              "fieldValue": "={{ $json.methodology }}"
+            },
+            {
+              "fieldId": "results",
+              "fieldValue": "={{ $json.results }}"
+            },
+            {
+              "fieldId": "conclusion",
+              "fieldValue": "={{ $json.conclusion }}"
+            },
+            {
+              "fieldId": "conflict_of_interest",
+              "fieldValue": "={{ $json.conflict_of_interest }}"
+            },
+            {
+              "fieldId": "key_findings",
+              "fieldValue": "={{ $json.key_findings }}"
+            }
+          ]
+        },
+        "options": {
+          "returnData": true
+        }
+      },
+      "id": "supabase-insert-summary",
+      "name": "Supabase - Insert Summary",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1560, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"paper_id\": \"{{ $('Supabase - Insert Paper').first().json.id }}\",\n  \"summary_id\": \"{{ $json.id }}\",\n  \"title\": \"{{ $('Supabase - Insert Paper').first().json.title }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ $json.error }}"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1120, 500]
+    }
+  ],
+  "connections": {
+    "Webhook - Paper Upload": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "AI - Analyze Paper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI - Analyze Paper": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data for Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data for Supabase": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insert Paper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insert Paper": {
+      "main": [
+        [
+          {
+            "node": "Prepare Summary with Paper ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Summary with Paper ID": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insert Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insert Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "pinData": {}
+}

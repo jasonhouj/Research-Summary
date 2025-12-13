@@ -5,9 +5,11 @@ import { PaperCard } from '../components/PaperCard';
 import { UploadZone } from '../components/UploadZone';
 import { Paper, PaperStatus } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { Clock, BookOpen, FileText, Zap } from 'lucide-react';
+import { Clock, BookOpen, FileText, Zap, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import { processPDF, uploadPaperPages, extractPDFText } from '../lib/pdfProcessor';
+import { triggerPaperSummary, isN8nConfigured, convertToSummaryFormat } from '../lib/n8nService';
 
 const statsData = [
   { name: 'Mon', papers: 2 },
@@ -25,6 +27,7 @@ export const Dashboard: React.FC = () => {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPapers, setTotalPapers] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState<{ stage: string; progress: number } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -54,25 +57,145 @@ export const Dashboard: React.FC = () => {
   const handleUpload = async (file: File) => {
     if (!user) return;
 
-    // Create paper record in Supabase
-    const newPaper = {
-      user_id: user.id,
-      title: file.name.replace('.pdf', '').replace(/_/g, ' ').replace(/-/g, ' '),
-      authors: ['Unknown Author'],
-      upload_date: new Date().toISOString(),
-      status: 'pending' as PaperStatus,
-      original_filename: file.name
-    };
+    try {
+      // Stage 1: Create paper record
+      setUploadProgress({ stage: 'Creating paper record...', progress: 5 });
 
-    const { data, error } = await supabase
-      .from('papers')
-      .insert(newPaper)
-      .select()
-      .single();
+      const newPaper = {
+        user_id: user.id,
+        title: file.name.replace('.pdf', '').replace(/_/g, ' ').replace(/-/g, ' '),
+        authors: ['Unknown Author'],
+        upload_date: new Date().toISOString(),
+        status: 'processing' as PaperStatus,
+        original_filename: file.name
+      };
 
-    if (data && !error) {
-      setPapers([{ ...data, authors: data.authors || [] }, ...papers]);
+      const { data: paperData, error: paperError } = await supabase
+        .from('papers')
+        .insert(newPaper)
+        .select()
+        .single();
+
+      if (paperError || !paperData) {
+        throw new Error('Failed to create paper record');
+      }
+
+      // Add to UI immediately
+      setPapers(prev => [{ ...paperData, authors: paperData.authors || [] }, ...prev]);
       setTotalPapers(prev => prev + 1);
+
+      // Stage 2: Process PDF to images
+      setUploadProgress({ stage: 'Processing PDF pages...', progress: 15 });
+
+      const processedPages = await processPDF(file, (current, total) => {
+        const progress = 15 + Math.round((current / total) * 40);
+        setUploadProgress({ stage: `Processing page ${current} of ${total}...`, progress });
+      });
+
+      // Stage 3: Upload images to storage
+      setUploadProgress({ stage: 'Uploading page images...', progress: 60 });
+
+      await uploadPaperPages(user.id, paperData.id, processedPages, (current, total) => {
+        const progress = 60 + Math.round((current / total) * 30);
+        setUploadProgress({ stage: `Uploading page ${current} of ${total}...`, progress });
+      });
+
+      // Stage 4: Update paper with page count
+      setUploadProgress({ stage: 'Finalizing...', progress: 90 });
+
+      await supabase
+        .from('papers')
+        .update({ page_count: processedPages.length, status: 'pending' as PaperStatus })
+        .eq('id', paperData.id);
+
+      // Stage 5: Trigger n8n workflow for AI summary (if configured)
+      if (isN8nConfigured()) {
+        setUploadProgress({ stage: 'Extracting text from PDF...', progress: 91 });
+
+        try {
+          // Extract text from PDF client-side (more reliable than n8n's PDF extraction)
+          const pdfText = await extractPDFText(file);
+          console.log('Extracted PDF text length:', pdfText.length);
+
+          setUploadProgress({ stage: 'Generating AI summary (this may take a moment)...', progress: 93 });
+
+          // Call n8n webhook with extracted text
+          const n8nResponse = await triggerPaperSummary(pdfText, file.name, (stage) => {
+            setUploadProgress({ stage, progress: 95 });
+          });
+
+          setUploadProgress({ stage: 'Saving summary to database...', progress: 97 });
+
+          // Convert n8n response to our database format
+          const summaryData = convertToSummaryFormat(n8nResponse);
+
+          // Insert summary into Supabase
+          const { error: summaryError } = await supabase
+            .from('summaries')
+            .insert({
+              paper_id: paperData.id,
+              ...summaryData
+            });
+
+          if (summaryError) {
+            console.error('Failed to save summary:', summaryError);
+            throw new Error('Failed to save summary to database');
+          }
+
+          // Update paper with title from AI and mark as completed
+          const aiTitle = n8nResponse.paper.title !== 'Title not found'
+            ? n8nResponse.paper.title
+            : paperData.title;
+
+          await supabase
+            .from('papers')
+            .update({
+              title: aiTitle,
+              status: 'completed' as PaperStatus
+            })
+            .eq('id', paperData.id);
+
+          // Update local state
+          setPapers(prev => prev.map(p =>
+            p.id === paperData.id
+              ? { ...p, page_count: processedPages.length, title: aiTitle, status: 'completed' as PaperStatus }
+              : p
+          ));
+        } catch (n8nError) {
+          console.error('AI summary generation failed:', n8nError);
+          // Update status to failed so user knows something went wrong
+          await supabase
+            .from('papers')
+            .update({ status: 'failed' as PaperStatus })
+            .eq('id', paperData.id);
+
+          setPapers(prev => prev.map(p =>
+            p.id === paperData.id
+              ? { ...p, page_count: processedPages.length, status: 'failed' as PaperStatus }
+              : p
+          ));
+
+          // Show error but don't stop the flow
+          alert('AI summary generation failed. You can retry later.');
+        }
+      } else {
+        // No n8n configured - just update local state with pending status
+        setPapers(prev => prev.map(p =>
+          p.id === paperData.id
+            ? { ...p, page_count: processedPages.length, status: 'pending' as PaperStatus }
+            : p
+        ));
+      }
+
+      setUploadProgress({ stage: 'Complete!', progress: 100 });
+
+      // Clear progress after a short delay
+      setTimeout(() => setUploadProgress(null), 1500);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload paper. Please try again.');
+      setUploadProgress(null);
     }
   };
 
@@ -134,7 +257,8 @@ export const Dashboard: React.FC = () => {
           "Superior parallelization capabilities",
           "New state-of-the-art BLEU scores",
           "Reduced training costs"
-        ]
+        ],
+        conflict_of_interest: "The authors are affiliated with Google Brain and Google Research. Some authors may hold equity in Alphabet Inc. The research was conducted using Google computational resources. No external funding sources were disclosed."
       };
 
       const { data: summaryData, error: summaryError } = await supabase
@@ -224,6 +348,29 @@ export const Dashboard: React.FC = () => {
         {/* Upload Column */}
         <div className="space-y-6">
           <h3 className="font-display font-semibold text-xl text-charcoal">Quick Upload</h3>
+
+          {/* Upload Progress Indicator */}
+          {uploadProgress && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <Loader2 size={18} className="text-sage animate-spin" />
+                <span className="text-sm text-charcoal font-medium">{uploadProgress.stage}</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-sage rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${uploadProgress.progress}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+            </motion.div>
+          )}
+
           <UploadZone onUpload={handleUpload} />
 
           <div className="bg-charcoal text-white p-6 rounded-xl relative overflow-hidden group cursor-pointer">

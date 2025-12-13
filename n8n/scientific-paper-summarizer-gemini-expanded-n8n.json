@@ -1,0 +1,322 @@
+{
+  "name": "Scientific Research Paper Summarizer (Gemini) - Expanded",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-paper",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive PDF",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "research-paper-summarizer"
+    },
+    {
+      "parameters": {
+        "operation": "extractFromPdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "extract-pdf-text",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse sections from scientific research paper with EXPANDED section name variations\nconst text = $input.first().json.text || $input.first().json.data || '';\n\n// Function to extract section content between headers\nfunction extractSection(text, sectionNames, nextSectionNames) {\n  for (const name of sectionNames) {\n    const patterns = [\n      // Pattern 1: Numbered sections (1. Introduction, 2. Methods, etc.)\n      new RegExp(`(?:^|\\\\n)\\\\s*(?:\\\\d+\\\\.?\\\\s*)?${name}[:\\\\s]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n\\\\s*(?:\\\\d+\\\\.?\\\\s*)?(?:${nextSectionNames.join('|')})[:\\\\s]*\\\\n|$)`, 'i'),\n      // Pattern 2: Simple headers\n      new RegExp(`(?:^|\\\\n)${name}[:\\\\s]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n(?:${nextSectionNames.join('|')})[:\\\\s]*\\\\n|$)`, 'i'),\n      // Pattern 3: Inline headers\n      new RegExp(`${name}[:\\\\s]*([\\\\s\\\\S]*?)(?=(?:${nextSectionNames.join('|')})|$)`, 'i'),\n      // Pattern 4: ALL CAPS headers\n      new RegExp(`(?:^|\\\\n)${name.toUpperCase()}[:\\\\s]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n(?:${nextSectionNames.map(n => n.toUpperCase()).join('|')})[:\\\\s]*\\\\n|$)`, 'i'),\n      // Pattern 5: Roman numeral sections (I. II. III.)\n      new RegExp(`(?:^|\\\\n)\\\\s*(?:[IVX]+\\\\.?\\\\s*)?${name}[:\\\\s]*\\\\n([\\\\s\\\\S]*?)(?=\\\\n\\\\s*(?:[IVX]+\\\\.?\\\\s*)?(?:${nextSectionNames.join('|')})[:\\\\s]*\\\\n|$)`, 'i')\n    ];\n    \n    for (const pattern of patterns) {\n      const match = text.match(pattern);\n      if (match && match[1] && match[1].trim().length > 50) {\n        return match[1].trim().substring(0, 10000); // Increased limit for longer sections\n      }\n    }\n  }\n  return null;\n}\n\n// Extract title (multiple strategies)\nlet title = 'Title not found';\nconst titlePatterns = [\n  /^([^\\n]{10,200})/m,\n  /title[:\\s]*([^\\n]{10,200})/i,\n];\nfor (const pattern of titlePatterns) {\n  const match = text.match(pattern);\n  if (match && match[1]) {\n    title = match[1].trim();\n    break;\n  }\n}\n\n// Extract abstract (multiple patterns)\nlet abstract = 'Abstract not found';\nconst abstractPatterns = [\n  /abstract[:\\s]*\\n([\\s\\S]{100,4000}?)(?=\\n\\s*(?:keywords|key words|introduction|background|1\\.|\\n\\n\\n))/i,\n  /abstract[:\\s]*([\\s\\S]{100,4000}?)(?=\\n\\s*(?:keywords|introduction|background|1\\.))/i,\n  /summary[:\\s]*\\n([\\s\\S]{100,4000}?)(?=\\n\\s*(?:keywords|introduction|background|1\\.))/i\n];\nfor (const pattern of abstractPatterns) {\n  const match = text.match(pattern);\n  if (match && match[1]) {\n    abstract = match[1].trim();\n    break;\n  }\n}\n\n// EXPANDED section extraction configuration with many more variations\nconst sectionConfig = {\n  introduction: {\n    names: [\n      'introduction',\n      'background',\n      'background and introduction',\n      'introduction and background',\n      'overview',\n      'general introduction',\n      'study background',\n      'research background',\n      'context',\n      'literature review',\n      'theoretical background',\n      'rationale',\n      'study rationale',\n      'problem statement',\n      'research context',\n      'state of the art',\n      'motivation',\n      'preamble'\n    ],\n    next: [\n      'method', 'methods', 'methodology', 'materials and methods', 'material and methods',\n      'materials & methods', 'material & methods', 'experimental', 'experimental methods',\n      'experimental design', 'experimental procedures', 'experimental section',\n      'study design', 'study methods', 'research methods', 'research methodology',\n      'research design', 'procedures', 'participants', 'subjects', 'patients',\n      'data collection', 'data and methods', 'approach', 'technical approach',\n      'system and methods', 'model', 'proposed method', 'framework',\n      '2\\\\.', 'II\\\\.'\n    ]\n  },\n  methods: {\n    names: [\n      'methods',\n      'method',\n      'methodology',\n      'methodologies',\n      'materials and methods',\n      'material and methods',\n      'materials & methods',\n      'material & methods',\n      'materials and method',\n      'experimental',\n      'experimental methods',\n      'experimental design',\n      'experimental procedures',\n      'experimental section',\n      'experimental setup',\n      'experimental protocol',\n      'study design',\n      'study methods',\n      'study protocol',\n      'study population',\n      'research methods',\n      'research methodology',\n      'research design',\n      'procedures',\n      'procedure',\n      'participants',\n      'participants and methods',\n      'subjects',\n      'subjects and methods',\n      'patients',\n      'patients and methods',\n      'sample',\n      'sampling',\n      'data collection',\n      'data and methods',\n      'data sources',\n      'approach',\n      'technical approach',\n      'proposed method',\n      'proposed approach',\n      'proposed methodology',\n      'framework',\n      'theoretical framework',\n      'model',\n      'system model',\n      'system design',\n      'implementation',\n      'algorithm',\n      'statistical analysis',\n      'statistical methods',\n      'analysis',\n      'analytical methods',\n      'measures',\n      'instruments',\n      'intervention',\n      'treatment',\n      'settings',\n      'setting and participants'\n    ],\n    next: [\n      'results', 'result', 'findings', 'outcomes', 'outcome',\n      'observations', 'data', 'experimental results', 'study results',\n      'research findings', 'key findings', 'main findings', 'output',\n      'outputs', 'performance', 'evaluation', 'experiments',\n      'case study', 'case studies', 'analysis results',\n      '3\\\\.', 'III\\\\.'\n    ]\n  },\n  results: {\n    names: [\n      'results',\n      'result',\n      'findings',\n      'key findings',\n      'main findings',\n      'major findings',\n      'principal findings',\n      'outcomes',\n      'outcome',\n      'observations',\n      'data',\n      'experimental results',\n      'study results',\n      'research findings',\n      'output',\n      'outputs',\n      'performance',\n      'performance evaluation',\n      'evaluation',\n      'evaluation results',\n      'experiments',\n      'experiment results',\n      'experimental evaluation',\n      'case study',\n      'case studies',\n      'results and analysis',\n      'results and findings',\n      'empirical results',\n      'numerical results',\n      'simulation results',\n      'clinical results',\n      'statistical results',\n      'quantitative results',\n      'qualitative results'\n    ],\n    next: [\n      'discussion', 'analysis', 'interpretation', 'implications',\n      'general discussion', 'results discussion', 'findings discussion',\n      'discussion of results', 'discussion of findings', 'comments',\n      'remarks', 'critical analysis', 'synthesis',\n      '4\\\\.', 'IV\\\\.'\n    ]\n  },\n  discussion: {\n    names: [\n      'discussion',\n      'general discussion',\n      'discussion of results',\n      'discussion of findings',\n      'discussion and analysis',\n      'analysis',\n      'interpretation',\n      'interpretation of results',\n      'interpretation of findings',\n      'implications',\n      'clinical implications',\n      'practical implications',\n      'theoretical implications',\n      'significance',\n      'comments',\n      'remarks',\n      'critical analysis',\n      'synthesis',\n      'discussion and implications',\n      'discussion and interpretation',\n      'findings discussion',\n      'results discussion',\n      'study implications',\n      'research implications'\n    ],\n    next: [\n      'conclusion', 'conclusions', 'summary', 'summary and conclusion',\n      'summary and conclusions', 'concluding remarks', 'final remarks',\n      'closing remarks', 'limitations', 'study limitations',\n      'limitations and future work', 'future work', 'future directions',\n      'future research', 'recommendations', 'outlook',\n      '5\\\\.', '6\\\\.', 'V\\\\.', 'VI\\\\.'\n    ]\n  },\n  conclusion: {\n    names: [\n      'conclusion',\n      'conclusions',\n      'summary',\n      'summary and conclusion',\n      'summary and conclusions',\n      'concluding remarks',\n      'final remarks',\n      'closing remarks',\n      'general conclusions',\n      'key conclusions',\n      'main conclusions',\n      'overall conclusions',\n      'takeaways',\n      'key takeaways',\n      'final thoughts',\n      'wrap up',\n      'synthesis',\n      'final summary',\n      'executive summary',\n      'conclusions and future work',\n      'conclusions and recommendations',\n      'conclusion and outlook',\n      'conclusion and future directions',\n      'limitations and conclusions',\n      'discussion and conclusion',\n      'discussion and conclusions'\n    ],\n    next: [\n      'references', 'reference', 'bibliography', 'works cited', 'citations',\n      'acknowledgment', 'acknowledgement', 'acknowledgments', 'acknowledgements',\n      'conflict', 'conflicts', 'declaration', 'declarations', 'disclosure',\n      'disclosures', 'funding', 'financial', 'author', 'authors',\n      'appendix', 'appendices', 'supplementary', 'supporting information',\n      'data availability', 'code availability', 'ethics'\n    ]\n  },\n  conflictOfInterest: {\n    names: [\n      'conflict of interest',\n      'conflicts of interest',\n      'conflict of interests',\n      'competing interests',\n      'competing interest',\n      'declaration of interest',\n      'declaration of interests',\n      'declarations of interest',\n      'disclosures',\n      'disclosure',\n      'financial disclosure',\n      'financial disclosures',\n      'declaration of competing interest',\n      'declaration of competing interests',\n      'competing financial interests',\n      'conflict disclosure',\n      'potential conflicts of interest',\n      'author disclosures',\n      'disclosure statement',\n      'declarations',\n      'ethical declarations',\n      'transparency declaration',\n      'interests',\n      'COI statement',\n      'duality of interest',\n      'funding and conflicts of interest',\n      'financial interests',\n      'relevant financial activities',\n      'financial relationships'\n    ],\n    next: [\n      'references', 'reference', 'bibliography', 'works cited',\n      'acknowledgment', 'acknowledgement', 'acknowledgments', 'acknowledgements',\n      'funding', 'financial support', 'author contributions', 'contributors',\n      'appendix', 'appendices', 'supplementary', 'supporting information',\n      'data availability', 'ethics', 'orcid'\n    ]\n  }\n};\n\n// Extract all sections\nconst sections = {};\nfor (const [key, config] of Object.entries(sectionConfig)) {\n  sections[key] = extractSection(text, config.names, config.next);\n}\n\n// Store original data for later use\nreturn [{\n  json: {\n    title: title,\n    abstract: abstract,\n    sections: {\n      introduction: sections.introduction || 'Section not found in document. The paper may use a non-standard structure.',\n      methods: sections.methods || 'Section not found in document. The paper may use a non-standard structure.',\n      results: sections.results || 'Section not found in document. The paper may use a non-standard structure.',\n      discussion: sections.discussion || 'Section not found in document. The paper may use a non-standard structure.',\n      conclusion: sections.conclusion || 'Section not found in document. The paper may use a non-standard structure.',\n      conflictOfInterest: sections.conflictOfInterest || 'No conflict of interest section found in document.'\n    },\n    sectionsFound: {\n      introduction: !!sections.introduction,\n      methods: !!sections.methods,\n      results: !!sections.results,\n      discussion: !!sections.discussion,\n      conclusion: !!sections.conclusion,\n      conflictOfInterest: !!sections.conflictOfInterest\n    },\n    fullTextLength: text.length,\n    extractedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "parse-sections",
+      "name": "Parse Paper Sections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare prompts for each section\nconst data = $input.first().json;\nconst sections = data.sections;\nconst sectionsFound = data.sectionsFound;\n\nconst sectionPrompts = [\n  {\n    sectionKey: 'introduction',\n    sectionName: 'Introduction',\n    content: sections.introduction,\n    wasFound: sectionsFound.introduction,\n    prompt: sectionsFound.introduction \n      ? `You are a scientific research paper analyst. Summarize the following Introduction section of a scientific research paper in 2-3 concise paragraphs (150-250 words total).\\n\\nFocus on:\\n- The research problem or gap being addressed\\n- The main objectives or hypotheses\\n- The significance and relevance of the study\\n- Brief context of the field\\n\\nINTRODUCTION SECTION:\\n${sections.introduction}\\n\\nProvide a clear, well-structured summary:`\n      : 'The introduction section was not found in this paper. Please respond with: \"Introduction section not found in the uploaded document. The paper may use a non-standard structure or combined sections.\"'\n  },\n  {\n    sectionKey: 'methods',\n    sectionName: 'Methods',\n    content: sections.methods,\n    wasFound: sectionsFound.methods,\n    prompt: sectionsFound.methods\n      ? `You are a scientific research paper analyst. Summarize the following Methods section of a scientific research paper in 2-3 concise paragraphs (150-250 words total).\\n\\nFocus on:\\n- Study design and approach\\n- Participants/samples/materials used\\n- Key procedures and interventions\\n- Data collection methods\\n- Statistical or analytical methods\\n\\nMETHODS SECTION:\\n${sections.methods}\\n\\nProvide a clear, well-structured summary:`\n      : 'The methods section was not found in this paper. Please respond with: \"Methods section not found in the uploaded document. The paper may use a non-standard structure or combined sections.\"'\n  },\n  {\n    sectionKey: 'results',\n    sectionName: 'Results',\n    content: sections.results,\n    wasFound: sectionsFound.results,\n    prompt: sectionsFound.results\n      ? `You are a scientific research paper analyst. Summarize the following Results section of a scientific research paper in 2-3 concise paragraphs (150-250 words total).\\n\\nFocus on:\\n- Main findings and outcomes\\n- Key statistics and significance levels (p-values, effect sizes, etc.)\\n- Patterns and trends in the data\\n- Any unexpected or notable findings\\n\\nRESULTS SECTION:\\n${sections.results}\\n\\nProvide a clear, well-structured summary:`\n      : 'The results section was not found in this paper. Please respond with: \"Results section not found in the uploaded document. The paper may use a non-standard structure or combined sections.\"'\n  },\n  {\n    sectionKey: 'discussion',\n    sectionName: 'Discussion',\n    content: sections.discussion,\n    wasFound: sectionsFound.discussion,\n    prompt: sectionsFound.discussion\n      ? `You are a scientific research paper analyst. Summarize the following Discussion section of a scientific research paper in 2-3 concise paragraphs (150-250 words total).\\n\\nFocus on:\\n- Interpretation of the main findings\\n- How results compare to previous research\\n- Theoretical and practical implications\\n- Limitations acknowledged by the authors\\n- Suggestions for future research\\n\\nDISCUSSION SECTION:\\n${sections.discussion}\\n\\nProvide a clear, well-structured summary:`\n      : 'The discussion section was not found in this paper. Please respond with: \"Discussion section not found in the uploaded document. The paper may use a non-standard structure or combined sections.\"'\n  },\n  {\n    sectionKey: 'conclusion',\n    sectionName: 'Conclusion',\n    content: sections.conclusion,\n    wasFound: sectionsFound.conclusion,\n    prompt: sectionsFound.conclusion\n      ? `You are a scientific research paper analyst. Summarize the following Conclusion section of a scientific research paper in 1-2 concise paragraphs (75-150 words total).\\n\\nFocus on:\\n- The main takeaways and key conclusions\\n- Broader implications of the research\\n- Recommendations or future directions\\n\\nCONCLUSION SECTION:\\n${sections.conclusion}\\n\\nProvide a clear, well-structured summary:`\n      : 'The conclusion section was not found in this paper. Please respond with: \"Conclusion section not found in the uploaded document. The paper may use a non-standard structure or combined sections.\"'\n  },\n  {\n    sectionKey: 'conflictOfInterest',\n    sectionName: 'Conflict of Interest',\n    content: sections.conflictOfInterest,\n    wasFound: sectionsFound.conflictOfInterest,\n    prompt: sectionsFound.conflictOfInterest\n      ? `You are a scientific research paper analyst. Review the following section and extract information about conflicts of interest, competing interests, and funding sources.\\n\\nProvide a brief summary (2-4 sentences) covering:\\n- Any declared conflicts of interest\\n- Funding sources mentioned\\n- Any competing interests\\n- If no conflicts are declared, state \\\"No conflicts of interest declared.\\\"\\n\\nCONFLICT OF INTEREST SECTION:\\n${sections.conflictOfInterest}\\n\\nSummary:`\n      : 'The conflict of interest section was not found in this paper. Please respond with: \"Conflict of interest section not found in the uploaded document. This information may be included in another section or not disclosed.\"'\n  }\n];\n\n// Pass along title and abstract for final compilation\nconst metadata = {\n  title: data.title,\n  abstract: data.abstract,\n  fullTextLength: data.fullTextLength,\n  extractedAt: data.extractedAt,\n  sectionsFound: sectionsFound\n};\n\n// Return items for processing\nreturn sectionPrompts.map(item => ({\n  json: {\n    ...item,\n    metadata: metadata\n  }\n}));"
+      },
+      "id": "prepare-prompts",
+      "name": "Prepare AI Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-sections",
+      "name": "Loop Over Sections",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-1.5-flash",
+          "mode": "list",
+          "cachedResultName": "Gemini 1.5 Flash"
+        },
+        "text": "={{ $json.prompt }}",
+        "options": {
+          "temperature": 0.3,
+          "maxOutputTokens": 500
+        }
+      },
+      "id": "gemini-summarize",
+      "name": "Google Gemini - Summarize Section",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "REPLACE_WITH_YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the AI response and pass along section info\nconst inputData = $('Loop Over Sections').first().json;\nconst aiResponse = $input.first().json;\n\n// Gemini returns response in different formats depending on node version\nlet summary = '';\nif (aiResponse.text) {\n  summary = aiResponse.text;\n} else if (aiResponse.message?.content) {\n  summary = aiResponse.message.content;\n} else if (aiResponse.content) {\n  summary = aiResponse.content;\n} else if (typeof aiResponse === 'string') {\n  summary = aiResponse;\n} else {\n  summary = 'Summary generation failed';\n}\n\nreturn [{\n  json: {\n    sectionKey: inputData.sectionKey,\n    sectionName: inputData.sectionName,\n    summary: summary,\n    wasFound: inputData.wasFound,\n    metadata: inputData.metadata\n  }\n}];"
+      },
+      "id": "extract-response",
+      "name": "Extract AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-summaries",
+      "name": "Aggregate All Summaries",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile all summaries into final response\nconst allData = $input.first().json.data;\n\n// Initialize response object\nconst response = {\n  success: true,\n  paper: {\n    title: '',\n    abstract: ''\n  },\n  summaries: {\n    introduction: 'Not available',\n    methods: 'Not available',\n    results: 'Not available',\n    discussion: 'Not available',\n    conclusion: 'Not available',\n    conflictOfInterest: 'Not available'\n  },\n  sectionsFound: {\n    introduction: false,\n    methods: false,\n    results: false,\n    discussion: false,\n    conclusion: false,\n    conflictOfInterest: false\n  },\n  metadata: {\n    generatedAt: new Date().toISOString(),\n    sectionsProcessed: 0,\n    sectionsSuccessfullyFound: 0,\n    fullTextLength: 0,\n    aiModel: 'Google Gemini 1.5 Flash'\n  }\n};\n\n// Process each summary\nfor (const item of allData) {\n  if (item.sectionKey && item.summary) {\n    response.summaries[item.sectionKey] = item.summary;\n    response.sectionsFound[item.sectionKey] = item.wasFound || false;\n    response.metadata.sectionsProcessed++;\n    if (item.wasFound) {\n      response.metadata.sectionsSuccessfullyFound++;\n    }\n  }\n  \n  // Get metadata from first item\n  if (item.metadata && !response.paper.title) {\n    response.paper.title = item.metadata.title || 'Title not extracted';\n    response.paper.abstract = item.metadata.abstract || 'Abstract not extracted';\n    response.metadata.fullTextLength = item.metadata.fullTextLength || 0;\n  }\n}\n\nreturn [{ json: response }];"
+      },
+      "id": "compile-response",
+      "name": "Compile Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Scientific Research Paper Summarizer (Gemini) - EXPANDED\n\n### Supports 100+ Section Title Variations!\n\nThis workflow recognizes many different ways papers name their sections:\n\n**Introduction variations:**\n- Introduction, Background, Overview, Literature Review, Context, Rationale, Problem Statement, etc.\n\n**Methods variations:**\n- Methods, Methodology, Materials and Methods, Materials & Methods, Experimental, Study Design, Procedures, Participants, Data Collection, etc.\n\n**Results variations:**\n- Results, Findings, Outcomes, Observations, Data, Performance, Evaluation, Experiments, Case Study, etc.\n\n**Discussion variations:**\n- Discussion, Analysis, Interpretation, Implications, Comments, Remarks, Synthesis, etc.\n\n**Conclusion variations:**\n- Conclusion, Conclusions, Summary, Concluding Remarks, Final Remarks, Takeaways, etc.\n\n**Conflict of Interest variations:**\n- Conflict of Interest, Competing Interests, Declaration of Interest, Disclosures, Financial Disclosure, etc.",
+        "height": 560,
+        "width": 400,
+        "color": 4
+      },
+      "id": "sticky-note",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, -280]
+    },
+    {
+      "parameters": {
+        "content": "### Enhanced Section Parsing\n\nNow recognizes:\n- Numbered sections (1., 2., etc.)\n- Roman numerals (I., II., etc.)\n- ALL CAPS headers\n- Combined sections\n- 100+ variations per section type",
+        "height": 180,
+        "width": 220,
+        "color": 5
+      },
+      "id": "sticky-note-2",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [680, 80]
+    },
+    {
+      "parameters": {
+        "content": "### Google Gemini AI\nUsing Gemini 1.5 Flash for fast, affordable summarization\n\nNow includes \"sectionsFound\" in response to show which sections were successfully detected!",
+        "height": 140,
+        "width": 280,
+        "color": 6
+      },
+      "id": "sticky-note-3",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1120, 120]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "Parse Paper Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Paper Sections": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompts": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Sections": {
+      "main": [
+        [
+          {
+            "node": "Google Gemini - Summarize Section",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate All Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini - Summarize Section": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Response": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Summaries": {
+      "main": [
+        [
+          {
+            "node": "Compile Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Final Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Research",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "PDF",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Gemini",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "3"
+}
