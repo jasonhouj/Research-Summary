@@ -44,7 +44,6 @@ export interface Paper {
   status: PaperStatus;
   original_filename: string;
   file_url?: string;
-  page_count?: number;
 }
 
 export interface SummaryResult {
@@ -70,62 +69,4 @@ export interface NavItem {
   label: string;
   path: string;
   icon: React.ElementType;
-}
-
-// PDF Viewer Types
-
-// Paper page image (converted from PDF)
-export interface PaperPage {
-  id: string;
-  paper_id: string;
-  page_number: number;
-  image_url: string;
-  width?: number;
-  height?: number;
-  created_at?: string;
-}
-
-// Section types for scroll synchronization
-export type SummarySection =
-  | 'hypothesis'
-  | 'introduction'
-  | 'methodology'
-  | 'conclusion'
-  | 'conflict_of_interest'
-  | `result_${number}`;
-
-// Highlight region on a PDF page (for future use)
-export interface HighlightRegion {
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-// Section-to-page mapping for scroll sync
-export interface SectionMapping {
-  id: string;
-  summary_id: string;
-  section_type: SummarySection;
-  start_page: number;
-  end_page: number;
-  highlight_regions?: HighlightRegion[];
-  created_at?: string;
-}
-
-// PDF Viewer state
-export interface PDFViewerState {
-  currentPage: number;
-  totalPages: number;
-  zoom: number;
-  isCollapsed: boolean;
-}
-
-// Processed page during upload (before storage)
-export interface ProcessedPage {
-  pageNumber: number;
-  imageBlob: Blob;
-  width: number;
-  height: number;
 }

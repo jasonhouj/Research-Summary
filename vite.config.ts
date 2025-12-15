@@ -10,9 +10,14 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         proxy: {
           '/api/n8n': {
-            target: env.VITE_N8N_WEBHOOK_URL?.replace('/webhook/summarize-paper', '') || 'https://jiieee.app.n8n.cloud',
+            target: 'https://jiieee.app.n8n.cloud',
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/api\/n8n/, '/webhook/summarize-paper'),
+            rewrite: () => {
+              // Extract the webhook path from the full URL
+              const webhookUrl = env.VITE_N8N_WEBHOOK_URL || '';
+              const match = webhookUrl.match(/\/webhook\/.+$/);
+              return match ? match[0] : '/webhook/summarize-paper';
+            },
           }
         }
       },

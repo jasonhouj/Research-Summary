@@ -1,0 +1,107 @@
+{
+  "name": "Paper Summarizer (Simple - No LangChain)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-paper",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "paper-summarizer-simple"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first();\nlet text = '';\nlet fileName = 'Unknown';\n\nif (input.json && input.json.text) {\n  text = input.json.text;\n  fileName = input.json.fileName || fileName;\n} else if (input.json && input.json.body && input.json.body.text) {\n  text = input.json.body.text;\n  fileName = input.json.body.fileName || fileName;\n}\n\nif (!text || text.length === 0) {\n  return [{ json: { error: 'No text received' } }];\n}\n\n// Truncate to avoid token limits (roughly 30k chars = ~7500 tokens)\nconst truncatedText = text.substring(0, 30000);\n\n// Extract title from first line\nconst lines = text.split('\\n').filter(l => l.trim().length > 10 && l.trim().length < 200);\nconst title = lines.length > 0 ? lines[0].trim() : fileName.replace('.pdf', '').replace(/[_-]/g, ' ');\n\n// Extract abstract\nlet abstract = 'Abstract not found';\nconst abstractMatch = text.match(/abstract\\s*\\n([\\s\\S]{100,2000}?)(?=\\n\\s*(?:keywords|introduction|1\\.))/i);\nif (abstractMatch) abstract = abstractMatch[1].trim();\n\nreturn [{ json: { text: truncatedText, title, abstract, fileName, fullTextLength: text.length } }];"
+      },
+      "id": "prepare-text",
+      "name": "Prepare Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a research paper summarizer. Analyze this paper and return a JSON object with these exact fields:\\n\\n{\\n  \\\"introduction\\\": \\\"2-3 paragraph summary of introduction/background\\\",\\n  \\\"methods\\\": \\\"2-3 paragraph summary of methodology\\\",\\n  \\\"results\\\": \\\"2-3 paragraph summary of key results\\\",\\n  \\\"discussion\\\": \\\"2-3 paragraph summary of discussion/implications\\\",\\n  \\\"conclusion\\\": \\\"1-2 paragraph summary of conclusions\\\",\\n  \\\"conflictOfInterest\\\": \\\"Any conflicts of interest mentioned, or 'None declared'\\\"\\n}\\n\\nIMPORTANT: Return ONLY the JSON object, no markdown, no explanation.\\n\\nPaper text:\\n{{ $json.text }}\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.3,\n    \"maxOutputTokens\": 2048\n  }\n}",
+        "options": {}
+      },
+      "id": "call-gemini",
+      "name": "Call Gemini API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst preparedData = $('Prepare Text').first().json;\n\n// Default response structure\nconst response = {\n  success: true,\n  paper: {\n    title: preparedData.title || 'Unknown',\n    abstract: preparedData.abstract || 'Not found'\n  },\n  summaries: {\n    introduction: 'Not available',\n    methods: 'Not available',\n    results: 'Not available',\n    discussion: 'Not available',\n    conclusion: 'Not available',\n    conflictOfInterest: 'Not available'\n  },\n  sectionsFound: {\n    introduction: false,\n    methods: false,\n    results: false,\n    discussion: false,\n    conclusion: false,\n    conflictOfInterest: false\n  },\n  metadata: {\n    generatedAt: new Date().toISOString(),\n    sectionsProcessed: 6,\n    sectionsSuccessfullyFound: 0,\n    fullTextLength: preparedData.fullTextLength || 0,\n    aiModel: 'Google Gemini 1.5 Flash'\n  }\n};\n\ntry {\n  // Extract text from Gemini response\n  const geminiText = input.candidates?.[0]?.content?.parts?.[0]?.text || '';\n  \n  // Try to parse as JSON (remove any markdown code blocks)\n  const cleanJson = geminiText.replace(/```json\\n?|```\\n?/g, '').trim();\n  const parsed = JSON.parse(cleanJson);\n  \n  // Map to our response format\n  if (parsed.introduction) {\n    response.summaries.introduction = parsed.introduction;\n    response.sectionsFound.introduction = true;\n    response.metadata.sectionsSuccessfullyFound++;\n  }\n  if (parsed.methods) {\n    response.summaries.methods = parsed.methods;\n    response.sectionsFound.methods = true;\n    response.metadata.sectionsSuccessfullyFound++;\n  }\n  if (parsed.results) {\n    response.summaries.results = parsed.results;\n    response.sectionsFound.results = true;\n    response.metadata.sectionsSuccessfullyFound++;\n  }\n  if (parsed.discussion) {\n    response.summaries.discussion = parsed.discussion;\n    response.sectionsFound.discussion = true;\n    response.metadata.sectionsSuccessfullyFound++;\n  }\n  if (parsed.conclusion) {\n    response.summaries.conclusion = parsed.conclusion;\n    response.sectionsFound.conclusion = true;\n    response.metadata.sectionsSuccessfullyFound++;\n  }\n  if (parsed.conflictOfInterest) {\n    response.summaries.conflictOfInterest = parsed.conflictOfInterest;\n    response.sectionsFound.conflictOfInterest = true;\n    response.metadata.sectionsSuccessfullyFound++;\n  }\n} catch (e) {\n  console.log('Failed to parse Gemini response:', e.message);\n  // Keep default values\n}\n\nreturn [{ json: response }];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Simple Paper Summarizer\n\n**Setup:**\n1. Add environment variable `GEMINI_API_KEY` in n8n settings\n2. Or replace `{{ $env.GEMINI_API_KEY }}` with your actual API key\n\n**Receives:** `{ \"text\": \"...\", \"fileName\": \"...\" }`\n\n**No LangChain required!**",
+        "height": 180,
+        "width": 320,
+        "color": 4
+      },
+      "id": "sticky-note",
+      "name": "Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, 80]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Prepare Text", "type": "main", "index": 0 }]]
+    },
+    "Prepare Text": {
+      "main": [[{ "node": "Call Gemini API", "type": "main", "index": 0 }]]
+    },
+    "Call Gemini API": {
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+    },
+    "Format Response": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

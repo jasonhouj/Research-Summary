@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Share2, Download, ArrowLeft, Copy, Lightbulb, Microscope, FileText, Target, AlertTriangle } from 'lucide-react';
-import { PaperSummary, PaperPage, SectionMapping } from '../types';
+import { ChevronDown, Share2, Download, ArrowLeft, Copy, Lightbulb, Microscope, FileText, Target, AlertTriangle, Users, ExternalLink } from 'lucide-react';
+import { PaperSummary } from '../types';
 import { supabase } from '../lib/supabaseClient';
-import { PDFViewerContainer } from '../components/pdf-viewer';
-import { fetchPaperPages, fetchSectionMappings } from '../lib/pdfProcessor';
 
 interface Paper {
     id: string;
     title: string;
-    authors: string[];
-    page_count?: number;
+    authors: string[] | null;
+    file_url?: string;
 }
 
 export const SummaryView: React.FC = () => {
@@ -20,8 +18,6 @@ export const SummaryView: React.FC = () => {
     const [paper, setPaper] = useState<Paper | null>(null);
     const [summary, setSummary] = useState<PaperSummary | null>(null);
     const [loading, setLoading] = useState(true);
-    const [pages, setPages] = useState<PaperPage[]>([]);
-    const [sectionMappings, setSectionMappings] = useState<SectionMapping[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -55,26 +51,8 @@ export const SummaryView: React.FC = () => {
                 if (summaryData) {
                     console.log('Summary data:', summaryData);
                     setSummary(summaryData);
-
-                    // Fetch section mappings if we have a summary
-                    try {
-                        const mappings = await fetchSectionMappings(summaryData.id);
-                        setSectionMappings(mappings);
-                    } catch (e) {
-                        console.log('No section mappings found');
-                    }
                 } else {
                     console.warn('No summary found for paper:', id);
-                }
-
-                // Fetch paper pages if available
-                if (paperData.page_count && paperData.page_count > 0) {
-                    try {
-                        const paperPages = await fetchPaperPages(id);
-                        setPages(paperPages);
-                    } catch (e) {
-                        console.log('No paper pages found');
-                    }
                 }
             }
             setLoading(false);
@@ -107,156 +85,17 @@ export const SummaryView: React.FC = () => {
         );
     }
 
-    const hasPages = pages.length > 0;
+    // Get authors as array, handling null/undefined cases
+    const authorsArray = paper.authors && Array.isArray(paper.authors) ? paper.authors : [];
 
-    // Summary content component (for reuse in both layouts)
-    const SummaryContent = () => (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-            {/* Left Col: Metadata (Sticky only on Large screens) */}
-            <div className="lg:col-span-3">
-                <div className="lg:sticky lg:top-40 space-y-6">
-                    <div>
-                        <span className="text-xs font-bold text-accent uppercase tracking-widest mb-2 block">Paper Title</span>
-                        <h1 className="font-display font-bold text-2xl lg:text-3xl text-charcoal leading-tight">
-                            {paper.title}
-                        </h1>
-                    </div>
-
-                    <div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 block">Authors</span>
-                        <p className="text-gray-600 text-sm leading-relaxed">{paper.authors.join(', ')}</p>
-                    </div>
-
-                    <div className="pt-6 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-charcoal mb-4 flex items-center gap-2">
-                            <Target size={16} className="text-sage" />
-                            Key Findings
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                            {summary.key_findings.map((finding, idx) => (
-                                <span key={idx} className="bg-white border border-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded-full shadow-sm">
-                                    {finding}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Right Col: Content */}
-            <div className="lg:col-span-9 space-y-8 relative z-10">
-
-                {/* Hypothesis Card */}
-                <motion.div
-                    data-section="hypothesis"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white border-l-4 border-sage p-8 rounded-r-xl shadow-sm"
-                >
-                    <div className="flex items-center gap-2 mb-4 text-sage-dark">
-                        <Lightbulb size={20} />
-                        <h3 className="font-display font-bold text-lg">Research Hypothesis</h3>
-                    </div>
-                    <p className="text-lg text-charcoal leading-relaxed font-display italic">
-                        "{summary.hypothesis}"
-                    </p>
-                </motion.div>
-
-                {summary.abstract_summary && (
-                    <motion.div
-                        data-section="abstract"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white border-l-4 border-sage-dark p-8 rounded-r-xl shadow-sm"
-                    >
-                        <div className="flex items-center gap-2 mb-4 text-sage-dark">
-                            <FileText size={20} />
-                            <h3 className="font-display font-bold text-lg">Abstract Summary</h3>
-                        </div>
-                        <p className="text-lg text-charcoal leading-relaxed font-display">
-                            {summary.abstract_summary}
-                        </p>
-                    </motion.div>
-                )}
-
-                <div data-section="introduction">
-                    <Section title="Introduction & Context" icon={FileText}>
-                        {summary.introduction}
-                    </Section>
-                </div>
-
-                <div data-section="methodology">
-                    <Section title="Methodology" icon={Microscope}>
-                        {summary.methodology}
-                    </Section>
-                </div>
-
-                <div className="space-y-4">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-1.5 bg-amber-100 text-amber-600 rounded">
-                            <Target size={18} />
-                        </div>
-                        <h3 className="font-display font-bold text-xl text-charcoal">Results & Discussion</h3>
-                    </div>
-
-                    {summary.results.map((result, idx) => (
-                        <motion.div
-                            key={idx}
-                            data-section={`result_${idx}`}
-                            initial={{ opacity: 0, x: -10 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            className="bg-white border border-gray-100 rounded-lg p-6 hover:shadow-md transition-shadow relative"
-                        >
-                            <div className="absolute top-6 left-0 w-1 h-8 bg-amber-400 rounded-r"></div>
-                            <h4 className="font-bold text-charcoal mb-2">{result.label}</h4>
-                            <p className="text-gray-600 mb-4 text-sm leading-relaxed">{result.content}</p>
-                            <div className="bg-offwhite-dark p-4 rounded text-sm text-gray-500 italic">
-                                <span className="font-semibold text-charcoal not-italic mr-2">Analysis:</span>
-                                {result.discussion}
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-
-                <motion.div
-                    data-section="conclusion"
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    className="bg-charcoal text-white p-8 rounded-xl shadow-lg mt-8"
-                >
-                    <h3 className="font-display font-bold text-xl mb-4 text-accent">Conclusion</h3>
-                    <p className="leading-relaxed opacity-90">
-                        {summary.conclusion}
-                    </p>
-                </motion.div>
-
-                {/* Conflict of Interest Section */}
-                {summary.conflict_of_interest && (
-                    <motion.div
-                        data-section="conflict_of_interest"
-                        initial={{ opacity: 0, y: 10 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="bg-amber-50 border border-amber-200 p-6 rounded-xl mt-8"
-                    >
-                        <div className="flex items-center gap-2 mb-3 text-amber-700">
-                            <AlertTriangle size={18} />
-                            <h3 className="font-display font-bold text-base">Conflict of Interest</h3>
-                        </div>
-                        <p className="text-amber-900 text-sm leading-relaxed">
-                            {summary.conflict_of_interest}
-                        </p>
-                    </motion.div>
-                )}
-
-            </div>
-        </div >
-    );
+    const handleViewPdf = () => {
+        if (paper.file_url) {
+            window.open(paper.file_url, '_blank');
+        }
+    };
 
     return (
-        <div className={`${hasPages ? 'max-w-full' : 'max-w-6xl'} mx-auto pb-20`}>
+        <div className="max-w-6xl mx-auto pb-20">
             {/* Navigation & Actions */}
             <div className="flex items-center justify-between mb-8 py-2 border-b border-gray-100">
                 <button
@@ -273,17 +112,171 @@ export const SummaryView: React.FC = () => {
                 </div>
             </div>
 
-            {/* Main content - with or without PDF viewer */}
-            {hasPages ? (
-                <PDFViewerContainer
-                    pages={pages}
-                    sectionMappings={sectionMappings}
-                >
-                    <SummaryContent />
-                </PDFViewerContainer>
-            ) : (
-                <SummaryContent />
-            )}
+            {/* Main Layout: Left Sidebar + Right Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Left Sidebar: Metadata */}
+                <div className="lg:col-span-4">
+                    <div className="lg:sticky lg:top-24 space-y-6">
+                        {/* Paper Title */}
+                        <div>
+                            <span className="text-xs font-bold text-accent uppercase tracking-widest mb-2 block">Paper Title</span>
+                            <h1 className="font-display font-bold text-2xl lg:text-3xl text-charcoal leading-tight">
+                                {paper.title}
+                            </h1>
+                        </div>
+
+                        {/* Authors */}
+                        {authorsArray.length > 0 && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Users size={14} className="text-gray-400" />
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Authors</span>
+                                </div>
+                                <p className="text-gray-600 text-sm leading-relaxed">{authorsArray.join(', ')}</p>
+                            </div>
+                        )}
+
+                        {/* View Original PDF Button */}
+                        <button
+                            onClick={handleViewPdf}
+                            disabled={!paper.file_url}
+                            className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-colors shadow-sm ${
+                                paper.file_url
+                                    ? 'bg-sage text-white hover:bg-sage-dark'
+                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            }`}
+                        >
+                            <FileText size={18} />
+                            <span className="font-medium">
+                                {paper.file_url ? 'View Original PDF' : 'PDF Not Available'}
+                            </span>
+                            {paper.file_url && <ExternalLink size={16} />}
+                        </button>
+
+                        {/* Key Findings */}
+                        <div className="pt-6 border-t border-gray-200">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Target size={14} className="text-sage" />
+                                Key Findings
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                                {summary.key_findings.map((finding, idx) => (
+                                    <span key={idx} className="bg-white border border-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded-full shadow-sm">
+                                        {finding}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Conflict of Interest */}
+                        {summary.conflict_of_interest && (
+                            <div className="pt-6 border-t border-gray-200">
+                                <h4 className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <AlertTriangle size={14} />
+                                    Conflict of Interest
+                                </h4>
+                                <p className="text-amber-800 text-xs leading-relaxed bg-amber-50 p-3 rounded-lg border border-amber-100">
+                                    {summary.conflict_of_interest}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Right Content: Summary Sections */}
+                <div className="lg:col-span-8 space-y-8">
+                    {/* Hypothesis Card */}
+                    <motion.div
+                        data-section="hypothesis"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white border-l-4 border-sage p-8 rounded-r-xl shadow-sm"
+                    >
+                        <div className="flex items-center gap-2 mb-4 text-sage-dark">
+                            <Lightbulb size={20} />
+                            <h3 className="font-display font-bold text-lg">Research Hypothesis</h3>
+                        </div>
+                        <p className="text-lg text-charcoal leading-relaxed font-display italic">
+                            "{summary.hypothesis}"
+                        </p>
+                    </motion.div>
+
+                    {/* Abstract Summary */}
+                    {summary.abstract_summary && (
+                        <motion.div
+                            data-section="abstract"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white border-l-4 border-sage-dark p-8 rounded-r-xl shadow-sm"
+                        >
+                            <div className="flex items-center gap-2 mb-4 text-sage-dark">
+                                <FileText size={20} />
+                                <h3 className="font-display font-bold text-lg">Abstract Summary</h3>
+                            </div>
+                            <p className="text-lg text-charcoal leading-relaxed font-display">
+                                {summary.abstract_summary}
+                            </p>
+                        </motion.div>
+                    )}
+
+                    {/* Introduction */}
+                    <div data-section="introduction">
+                        <Section title="Introduction & Context" icon={FileText}>
+                            {summary.introduction}
+                        </Section>
+                    </div>
+
+                    {/* Methodology */}
+                    <div data-section="methodology">
+                        <Section title="Methodology" icon={Microscope}>
+                            {summary.methodology}
+                        </Section>
+                    </div>
+
+                    {/* Results & Discussion */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-1.5 bg-amber-100 text-amber-600 rounded">
+                                <Target size={18} />
+                            </div>
+                            <h3 className="font-display font-bold text-xl text-charcoal">Results & Discussion</h3>
+                        </div>
+
+                        {summary.results.map((result, idx) => (
+                            <motion.div
+                                key={idx}
+                                data-section={`result_${idx}`}
+                                initial={{ opacity: 0, x: -10 }}
+                                whileInView={{ opacity: 1, x: 0 }}
+                                viewport={{ once: true }}
+                                className="bg-white border border-gray-100 rounded-lg p-6 hover:shadow-md transition-shadow relative"
+                            >
+                                <div className="absolute top-6 left-0 w-1 h-8 bg-amber-400 rounded-r"></div>
+                                <h4 className="font-bold text-charcoal mb-2">{result.label}</h4>
+                                <p className="text-gray-600 mb-4 text-sm leading-relaxed">{result.content}</p>
+                                <div className="bg-offwhite-dark p-4 rounded text-sm text-gray-500 italic">
+                                    <span className="font-semibold text-charcoal not-italic mr-2">Analysis:</span>
+                                    {result.discussion}
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Conclusion */}
+                    <motion.div
+                        data-section="conclusion"
+                        initial={{ opacity: 0 }}
+                        whileInView={{ opacity: 1 }}
+                        viewport={{ once: true }}
+                        className="bg-charcoal text-white p-8 rounded-xl shadow-lg mt-8"
+                    >
+                        <h3 className="font-display font-bold text-xl mb-4 text-accent">Conclusion</h3>
+                        <p className="leading-relaxed opacity-90">
+                            {summary.conclusion}
+                        </p>
+                    </motion.div>
+                </div>
+            </div>
         </div>
     );
 };

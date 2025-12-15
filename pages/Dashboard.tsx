@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Clock, BookOpen, FileText, Zap, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
-import { processPDF, uploadPaperPages, extractPDFText } from '../lib/pdfProcessor';
+import { extractPDFText } from '../lib/pdfProcessor';
 import { triggerPaperSummary, isN8nConfigured, convertToSummaryFormat } from '../lib/n8nService';
 
 const statsData = [
@@ -58,17 +58,55 @@ export const Dashboard: React.FC = () => {
     if (!user) return;
 
     try {
-      // Stage 1: Create paper record
-      setUploadProgress({ stage: 'Creating paper record...', progress: 5 });
+      // Stage 1: Upload original PDF to storage
+      setUploadProgress({ stage: 'Uploading PDF...', progress: 5 });
 
-      const newPaper = {
+      // Try to upload original PDF to storage (using paper-pages bucket which exists)
+      const pdfPath = `${user.id}/original-pdfs/${Date.now()}-${file.name}`;
+      let pdfUrl: string | undefined;
+
+      const { error: uploadError } = await supabase.storage
+        .from('paper-pages')
+        .upload(pdfPath, file, {
+          contentType: 'application/pdf',
+          upsert: false
+        });
+
+      if (uploadError) {
+        // Log but don't fail - PDF storage is optional
+        console.warn('PDF upload to storage failed:', uploadError.message);
+      } else {
+        // Get public URL for the uploaded PDF
+        const { data: { publicUrl } } = supabase.storage
+          .from('paper-pages')
+          .getPublicUrl(pdfPath);
+        pdfUrl = publicUrl;
+      }
+
+      // Stage 2: Create paper record
+      setUploadProgress({ stage: 'Creating paper record...', progress: 10 });
+
+      const newPaper: {
+        user_id: string;
+        title: string;
+        authors: string[];
+        upload_date: string;
+        status: PaperStatus;
+        original_filename: string;
+        file_url?: string;
+      } = {
         user_id: user.id,
         title: file.name.replace('.pdf', '').replace(/_/g, ' ').replace(/-/g, ' '),
         authors: ['Unknown Author'],
         upload_date: new Date().toISOString(),
         status: 'processing' as PaperStatus,
-        original_filename: file.name
+        original_filename: file.name,
       };
+
+      // Only add file_url if we successfully uploaded
+      if (pdfUrl) {
+        newPaper.file_url = pdfUrl;
+      }
 
       const { data: paperData, error: paperError } = await supabase
         .from('papers')
@@ -84,47 +122,23 @@ export const Dashboard: React.FC = () => {
       setPapers(prev => [{ ...paperData, authors: paperData.authors || [] }, ...prev]);
       setTotalPapers(prev => prev + 1);
 
-      // Stage 2: Process PDF to images
-      setUploadProgress({ stage: 'Processing PDF pages...', progress: 15 });
-
-      const processedPages = await processPDF(file, (current, total) => {
-        const progress = 15 + Math.round((current / total) * 40);
-        setUploadProgress({ stage: `Processing page ${current} of ${total}...`, progress });
-      });
-
-      // Stage 3: Upload images to storage
-      setUploadProgress({ stage: 'Uploading page images...', progress: 60 });
-
-      await uploadPaperPages(user.id, paperData.id, processedPages, (current, total) => {
-        const progress = 60 + Math.round((current / total) * 30);
-        setUploadProgress({ stage: `Uploading page ${current} of ${total}...`, progress });
-      });
-
-      // Stage 4: Update paper with page count
-      setUploadProgress({ stage: 'Finalizing...', progress: 90 });
-
-      await supabase
-        .from('papers')
-        .update({ page_count: processedPages.length, status: 'pending' as PaperStatus })
-        .eq('id', paperData.id);
-
-      // Stage 5: Trigger n8n workflow for AI summary (if configured)
+      // Stage 3: Trigger n8n workflow for AI summary (if configured)
       if (isN8nConfigured()) {
-        setUploadProgress({ stage: 'Extracting text from PDF...', progress: 91 });
+        setUploadProgress({ stage: 'Extracting text from PDF...', progress: 30 });
 
         try {
-          // Extract text from PDF client-side (more reliable than n8n's PDF extraction)
+          // Extract text from PDF client-side
           const pdfText = await extractPDFText(file);
           console.log('Extracted PDF text length:', pdfText.length);
 
-          setUploadProgress({ stage: 'Generating AI summary (this may take a moment)...', progress: 93 });
+          setUploadProgress({ stage: 'Generating AI summary (this may take a moment)...', progress: 50 });
 
           // Call n8n webhook with extracted text
           const n8nResponse = await triggerPaperSummary(pdfText, file.name, (stage) => {
-            setUploadProgress({ stage, progress: 95 });
+            setUploadProgress({ stage, progress: 70 });
           });
 
-          setUploadProgress({ stage: 'Saving summary to database...', progress: 97 });
+          setUploadProgress({ stage: 'Saving summary to database...', progress: 90 });
 
           // Convert n8n response to our database format
           const summaryData = convertToSummaryFormat(n8nResponse);
@@ -142,15 +156,19 @@ export const Dashboard: React.FC = () => {
             throw new Error('Failed to save summary to database');
           }
 
-          // Update paper with title from AI and mark as completed
+          // Update paper with title and authors from AI and mark as completed
           const aiTitle = n8nResponse.paper.title !== 'Title not found'
             ? n8nResponse.paper.title
             : paperData.title;
+          const aiAuthors = n8nResponse.paper.authors && n8nResponse.paper.authors.length > 0
+            ? n8nResponse.paper.authors
+            : paperData.authors;
 
           await supabase
             .from('papers')
             .update({
               title: aiTitle,
+              authors: aiAuthors,
               status: 'completed' as PaperStatus
             })
             .eq('id', paperData.id);
@@ -158,7 +176,7 @@ export const Dashboard: React.FC = () => {
           // Update local state
           setPapers(prev => prev.map(p =>
             p.id === paperData.id
-              ? { ...p, page_count: processedPages.length, title: aiTitle, status: 'completed' as PaperStatus }
+              ? { ...p, title: aiTitle, authors: aiAuthors, status: 'completed' as PaperStatus }
               : p
           ));
         } catch (n8nError) {
@@ -171,7 +189,7 @@ export const Dashboard: React.FC = () => {
 
           setPapers(prev => prev.map(p =>
             p.id === paperData.id
-              ? { ...p, page_count: processedPages.length, status: 'failed' as PaperStatus }
+              ? { ...p, status: 'failed' as PaperStatus }
               : p
           ));
 
@@ -179,10 +197,15 @@ export const Dashboard: React.FC = () => {
           alert('AI summary generation failed. You can retry later.');
         }
       } else {
-        // No n8n configured - just update local state with pending status
+        // No n8n configured - mark as pending
+        await supabase
+          .from('papers')
+          .update({ status: 'pending' as PaperStatus })
+          .eq('id', paperData.id);
+
         setPapers(prev => prev.map(p =>
           p.id === paperData.id
-            ? { ...p, page_count: processedPages.length, status: 'pending' as PaperStatus }
+            ? { ...p, status: 'pending' as PaperStatus }
             : p
         ));
       }
