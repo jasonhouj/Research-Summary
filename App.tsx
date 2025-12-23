@@ -8,6 +8,7 @@ import { AuthPage } from './pages/AuthPage';
 import { MyPapers } from './pages/MyPapers';
 import { ResetPassword } from './pages/ResetPassword';
 import { Settings } from './pages/Settings';
+import { LandingPage } from './pages/LandingPage';
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -25,13 +26,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
 };
 
-// Public Route wrapper (redirects to home if already logged in)
+// Public Route wrapper (redirects to dashboard if already logged in)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -47,7 +48,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -56,12 +57,19 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const AppRoutes: React.FC = () => {
   return (
     <Routes>
+      {/* Landing page - public */}
+      <Route path="/" element={
+        <PublicRoute>
+          <LandingPage />
+        </PublicRoute>
+      } />
       <Route path="/auth" element={
         <PublicRoute>
           <AuthPage />
         </PublicRoute>
       } />
-      <Route path="/" element={
+      {/* Dashboard - protected */}
+      <Route path="/dashboard" element={
         <ProtectedRoute>
           <Layout>
             <Dashboard />

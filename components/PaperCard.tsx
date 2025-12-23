@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FileText, Clock, CheckCircle2, AlertCircle, Eye, Trash2, FolderOpen, MoreVertical } from 'lucide-react';
-import { Paper, Folder } from '../types';
+import { Paper, Folder, FolderColor } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getFolderColorConfig } from '../pages/MyPapers';
 
 interface PaperCardProps {
   paper: Paper;
@@ -23,15 +24,19 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, onView, onDelete, f
   const StatusIcon = config.icon;
   const [showMenu, setShowMenu] = useState(false);
 
+  // Get the folder color for this paper
+  const paperFolder = folders?.find(f => f.id === paper.folder_id);
+  const folderColorConfig = paperFolder ? getFolderColorConfig(paperFolder.color) : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, boxShadow: "0 10px 30px -10px rgba(0,0,0,0.1)" }}
-      className={`bg-white rounded-lg p-6 shadow-sm border border-gray-100 border-l-4 ${config.color} group relative overflow-hidden`}
+      className={`bg-white rounded-lg p-6 shadow-sm border border-gray-100 border-l-4 ${folderColorConfig ? folderColorConfig.border.replace('border-', 'border-l-') : config.color} group relative overflow-hidden`}
     >
       <div className="flex justify-between items-start mb-4">
-        <div className="p-2 bg-offwhite-dark rounded-md text-charcoal-light">
+        <div className={`p-2 rounded-md ${folderColorConfig ? `${folderColorConfig.bg} ${folderColorConfig.icon}` : 'bg-offwhite-dark text-charcoal-light'}`}>
           <FileText size={24} />
         </div>
         <div className="flex items-center gap-2">
@@ -69,20 +74,23 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, onView, onDelete, f
                       <FolderOpen size={14} />
                       No Folder
                     </button>
-                    {folders.map(folder => (
-                      <button
-                        key={folder.id}
-                        onClick={() => {
-                          onMoveToFolder(folder.id);
-                          setShowMenu(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${paper.folder_id === folder.id ? 'text-sage font-medium' : 'text-gray-600'
-                          }`}
-                      >
-                        <FolderOpen size={14} />
-                        {folder.name}
-                      </button>
-                    ))}
+                    {folders.map(folder => {
+                      const fColor = getFolderColorConfig(folder.color);
+                      return (
+                        <button
+                          key={folder.id}
+                          onClick={() => {
+                            onMoveToFolder(folder.id);
+                            setShowMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${paper.folder_id === folder.id ? `${fColor.text} font-medium` : 'text-gray-600'
+                            }`}
+                        >
+                          <FolderOpen size={14} className={fColor.icon} />
+                          {folder.name}
+                        </button>
+                      );
+                    })}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -113,13 +121,18 @@ export const PaperCard: React.FC<PaperCardProps> = ({ paper, onView, onDelete, f
           >
             <Eye size={18} />
           </button>
-          <button
-            onClick={onDelete}
-            className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-            title="Delete Paper"
-          >
-            <Trash2 size={18} />
-          </button>
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+              title="Delete Paper"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
         </div>
       </div>
 

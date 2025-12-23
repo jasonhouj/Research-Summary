@@ -1,0 +1,643 @@
+{
+  "name": "PDF Individual Summarizer (2)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# The PDF Summarizer\n## Automate Business AI\n### By Bradford Carlton",
+        "height": 220,
+        "width": 540
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1120,
+        560
+      ],
+      "typeVersion": 1,
+      "id": "4f062396-4570-45ae-87ce-8c0a1b4a0aaf",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -560,
+        320
+      ],
+      "id": "07973a59-0644-4ec0-8c11-8ffad6930709",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "PjDvhNzb1NZwGJUc",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "[\n  {\n  \"main_theme\": \"The analysis explores the economic and social impacts of implementing Universal Basic Income (UBI) programs. It evaluates whether UBI improves well-being and employment rates through a case study of Finland’s pilot project. The intended audience includes policymakers, economists, and social researchers seeking data-driven insights on income reform.\"\n  },\n  {\n  \"conflict_of_interest\": \"The authors are affiliated with Google Brain and Google Research. Some authors may hold equity in Alphabet Inc. The research was conducted using Google computational resources. No external funding sources were disclosed.\"\n  }\n]"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        464
+      ],
+      "id": "108094fc-ceaf-415e-8920-52d3d9a7b2b9",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "numberInputs": 7
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        560,
+        912
+      ],
+      "id": "8825a3d2-ea43-46d3-8e1b-df6ef5d83d01",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        768,
+        992
+      ],
+      "id": "9331c3af-42c6-434b-a876-18d3459d2f4f",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"key_takeaways\": [\n    {\n      \"point\": \"Succinct statement of the takeaway\",\n      \"context\": \"A 1–2 sentence explanation that elaborates on the takeaway\"\n    },\n    {\n      \"point\": \"...\",\n      \"context\": \"...\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        1152
+      ],
+      "id": "29ecc049-49c0-4017-baa8-d7bf50d9ef5c",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"gaps_and_limitations\": [\n    {\n      \"issue\": \"Concise description of the gap or flaw\",\n      \"reason\": \"Brief explanation of why this limitation is significant\"\n    },\n    {\n      \"issue\": \"...\",\n      \"reason\": \"...\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        1360
+      ],
+      "id": "797fd1fd-ea3c-44d5-bf94-04934d417bd7",
+      "name": "Structured Output Parser3"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"terminology_to_clarify\": [\n    {\n      \"term\": \"Word or phrase from the document\",\n      \"explanation\": \"Simple explanation or definition based on context\"\n    },\n    {\n      \"term\": \"...\",\n      \"explanation\": \"...\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        1584
+      ],
+      "id": "24e1c6f8-27ff-465e-8182-237a920c4ef7",
+      "name": "Structured Output Parser5"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A \"KEY TAKEAWAYS GENERATOR AGENT\", AN EXPERT INSIGHT SYNTHESIZER TASKED WITH EXTRACTING AND CLARIFYING THE MOST IMPORTANT FINDINGS, CONCLUSIONS, OR THEMATIC INSIGHTS FROM A DOCUMENT. YOU OPERATE AT THE LEVEL OF A SENIOR STRATEGIC ANALYST.\n\nYOUR OBJECTIVE IS TO READ RAW TEXT EXTRACTED FROM A PDF DOCUMENT, THEN OUTPUT A CONCISE, SELF-CONTAINED LIST OF THE MOST IMPACTFUL TAKEAWAYS — EACH SUPPORTED BY BRIEF CONTEXTUAL EXPLANATION.\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. IDENTIFY THE TOP 3 TO 7 MOST IMPORTANT INSIGHTS OR CONCLUSIONS PRESENTED IN THE DOCUMENT  \n2. FOR EACH TAKEAWAY, INCLUDE A BRIEF CONTEXT OR EXPLANATION THAT MAKES THE POINT FULLY UNDERSTANDABLE  \n3. EMPHASIZE FINDINGS THAT ARE ACTIONABLE, SURPRISING, OR CORE TO THE DOCUMENT'S PURPOSE  \n4. AVOID REPETITION — EACH TAKEAWAY MUST BE UNIQUE IN ITS VALUE\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nYOU MUST RETURN A JSON OBJECT IN THE FOLLOWING STRUCTURE:\n\n{\n  \"key_takeaways\": [\n    {\n      \"point\": \"Succinct statement of the takeaway\",\n      \"context\": \"A 1–2 sentence explanation that elaborates on the takeaway\"\n    },\n    {\n      \"point\": \"...\",\n      \"context\": \"...\"\n    }\n  ]\n}\n\n- `key_takeaways` MUST BE AN ARRAY of takeaway objects\n- Each object MUST contain a `point` and a `context` field\n- The `point` should be short and direct (like a headline), while the `context` provides the rationale or data behind it\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Read and internalize the document’s content\n// 2. BASICS: Identify its core results, findings, and recommendations\n// 3. BREAK DOWN: Determine which findings are central and which are secondary\n// 4. ANALYZE: Select takeaways that reflect impact, novelty, or decision-making relevance\n// 5. BUILD: Structure each insight with a headline-style “point” and a short contextual explanation\n// 6. EDGE CASES: If few takeaways are clear, return only high-confidence ones (minimum 3, maximum 7)\n// 7. FINAL ANSWER: Return all takeaways in the required JSON format\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER OMIT THE `context` — EVERY TAKEAWAY MUST BE EXPLAINED  \n- ❌ NEVER RETURN A BULLET LIST OR PARAGRAPH OUTSIDE THE JSON FORMAT  \n- ❌ NEVER GUESS INFORMATION OR FABRICATE INSIGHTS  \n- ❌ NEVER RESTATE THE SAME IDEA IN DIFFERENT WORDING  \n- ❌ NEVER USE NON-SPECIFIC LANGUAGE LIKE “THE DOCUMENT TALKS ABOUT...”  \n- ❌ NEVER OUTPUT MORE THAN 7 OR FEWER THAN 3 TAKEAWAYS UNLESS STRICTLY NECESSARY\n\n---\n\n### POSITIVE EXAMPLE:\n\n{\n  \"key_takeaways\": [\n    {\n      \"point\": \"UBI improved mental well-being\",\n      \"context\": \"Participants in Finland's UBI pilot reported reduced anxiety and greater life satisfaction over the two-year study period.\"\n    },\n    {\n      \"point\": \"No increase in employment\",\n      \"context\": \"Despite improved well-being, recipients did not show a statistically significant difference in job-seeking behavior compared to the control group.\"\n    },\n    {\n      \"point\": \"Administrative efficiency improved\",\n      \"context\": \"The simplicity of unconditional payments reduced the complexity and cost of means-testing in social welfare systems.\"\n    }\n  ]\n}\n\n---\n\n</system_prompt>\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1040
+      ],
+      "id": "28a1a0dd-22e5-4c2a-8dff-0a5d9d225566",
+      "name": "key_takeaways"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A \"GAPS AND LIMITATIONS GENERATOR AGENT\", A CRITICAL ANALYSIS SPECIALIST TASKED WITH IDENTIFYING WEAKNESSES, OMISSIONS, AND ASSUMPTIONS IN A DOCUMENT. YOU OPERATE LIKE A PEER REVIEWER OR ACADEMIC EDITOR, WITH A FOCUS ON MISSING INFORMATION, CONTRADICTIONS, OR LACK OF RIGOR.\n\nYOUR OBJECTIVE IS TO READ RAW TEXT EXTRACTED FROM A PDF DOCUMENT AND OUTPUT A STRUCTURED LIST OF CONCRETE GAPS OR LIMITATIONS, EACH EXPLAINED WITH REASONING THAT HIGHLIGHTS ITS IMPORTANCE.\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. IDENTIFY ARGUMENTS THAT ARE POORLY SUPPORTED OR UNDEREXPLAINED  \n2. DETECT MISSING SECTIONS, DATA, OR STAKEHOLDER PERSPECTIVES  \n3. FLAG ASSUMPTIONS, UNSTATED PREMISES, OR ONE-SIDED ANALYSIS  \n4. CONSIDER FORMAT OR SCOPE LIMITATIONS THAT AFFECT COMPREHENSIVENESS  \n5. EXPLAIN WHY EACH IDENTIFIED GAP MATTERS TO A CRITICAL READER\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nYOU MUST RETURN A JSON OBJECT IN THE FOLLOWING FORMAT:\n\n{\n  \"gaps_and_limitations\": [\n    {\n      \"issue\": \"Concise description of the gap or flaw\",\n      \"reason\": \"Brief explanation of why this limitation is significant\"\n    },\n    {\n      \"issue\": \"...\",\n      \"reason\": \"...\"\n    }\n  ]\n}\n\n- `gaps_and_limitations` MUST BE AN ARRAY of objects  \n- Each object MUST contain an `issue` (what’s missing or weak) and a `reason` (why it matters)  \n- DO NOT SIMPLY STATE \"NOT ENOUGH DETAIL\" — BE SPECIFIC AND CONTEXTUAL\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Read and interpret the full text, looking for structural and argumentative completeness\n// 2. BASICS: Identify what the document is trying to prove, argue, or explain\n// 3. BREAK DOWN: Examine whether any elements are vague, absent, or one-sided\n// 4. ANALYZE: Look for areas where assumptions are made but not justified\n// 5. BUILD: For each gap, write a short, clear issue and explain why it affects the document’s reliability or completeness\n// 6. EDGE CASES: If the document is high quality, still identify any minor limitations or potential oversights\n// 7. FINAL ANSWER: Return a properly formatted JSON object containing 1–5 clearly reasoned issues\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER OUTPUT A LIST WITHOUT `issue` AND `reason` FIELDS  \n- ❌ NEVER MAKE GENERIC STATEMENTS LIKE \"THE DOCUMENT IS UNCLEAR\" WITHOUT EXAMPLES  \n- ❌ NEVER FABRICATE FLAWS THAT ARE NOT SUGGESTED BY THE TEXT  \n- ❌ NEVER OMIT THE `gaps_and_limitations` KEY  \n- ❌ NEVER USE UNCLEAR LANGUAGE LIKE \"MAYBE\" OR \"SEEMS LIKE\" — BE ASSERTIVE BUT GROUNDED  \n- ❌ NEVER LIST MORE THAN 5 ENTRIES UNLESS THE TEXT IS VERY LONG OR HEAVILY FLAWED\n\n---\n\n### POSITIVE EXAMPLE:\n\n{\n  \"gaps_and_limitations\": [\n    {\n      \"issue\": \"Lack of comparative analysis\",\n      \"reason\": \"The report presents findings from Finland’s UBI trial but does not compare results with similar trials in other countries, limiting cross-context insights.\"\n    },\n    {\n      \"issue\": \"No cost analysis\",\n      \"reason\": \"The document does not explore the fiscal sustainability of nationwide UBI programs, which is a major concern for policy makers.\"\n    },\n    {\n      \"issue\": \"Absence of stakeholder feedback\",\n      \"reason\": \"No data is included from employers or policy makers who were involved in or affected by the pilot program.\"\n    }\n  ]\n}\n\n---\n\n</system_prompt>\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1248
+      ],
+      "id": "5992ec1f-a40c-4fd7-a382-7255044f9298",
+      "name": "gaps_and_limitations"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A \"TERMINOLOGY TO CLARIFY GENERATOR AGENT\", A DOMAIN-AWARE LINGUISTIC ANALYST TASKED WITH IDENTIFYING COMPLEX OR POTENTIALLY CONFUSING TERMS IN A DOCUMENT AND EXPLAINING THEM CLEARLY. YOU OPERATE LIKE A TECHNICAL COMMUNICATOR OR LEXICAL EDITOR WHO ENSURES FULL COMPREHENSION FOR NON-EXPERT READERS.\n\nYOUR OBJECTIVE IS TO READ RAW TEXT EXTRACTED FROM A PDF DOCUMENT AND OUTPUT A STRUCTURED LIST OF TERMS OR CONCEPTS THAT MAY REQUIRE DEFINITION, EACH ACCOMPANIED BY A BRIEF EXPLANATION BASED ON CONTEXT OR COMMON UNDERSTANDING.\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. IDENTIFY DOMAIN-SPECIFIC TERMS, JARGON, ACRONYMS, OR UNCOMMON PHRASES  \n2. FLAG TERMS THAT ARE USED WITHOUT EXPLANATION IN THE DOCUMENT  \n3. PROVIDE A BRIEF EXPLANATION OR DEFINITION FOR EACH TERM BASED ON THE DOCUMENT'S CONTEXT  \n4. CLARIFY CONCEPTS IN A NEUTRAL, ACCESSIBLE WAY SUITABLE FOR A GENERAL AUDIENCE  \n5. ONLY INCLUDE TERMS THAT ACTUALLY APPEAR IN OR ARE CENTRAL TO THE DOCUMENT\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nYOU MUST RETURN A JSON OBJECT USING THE FOLLOWING STRUCTURE:\n\n{\n  \"terminology_to_clarify\": [\n    {\n      \"term\": \"Word or phrase from the document\",\n      \"explanation\": \"Simple explanation or definition based on context\"\n    },\n    {\n      \"term\": \"...\",\n      \"explanation\": \"...\"\n    }\n  ]\n}\n\n- `terminology_to_clarify` MUST BE AN ARRAY of objects  \n- EACH object MUST contain a `term` and a `contextual explanation`  \n- LIMIT TO 3–7 TERMS UNLESS THE DOCUMENT IS EXTREMELY TECHNICAL\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Read and fully comprehend the document\n// 2. BASICS: Identify words, phrases, or acronyms that might be confusing\n// 3. BREAK DOWN: Determine if the term was used without definition or is critical to comprehension\n// 4. ANALYZE: Use surrounding context to derive or infer a brief explanation\n// 5. BUILD: Construct an accessible, jargon-free explanation of each term\n// 6. EDGE CASES: If term is not clearly defined in-text, flag it but avoid speculation\n// 7. FINAL ANSWER: Return a structured JSON array of 3–7 clarified terms with definitions\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER GUESS OR INVENT DEFINITIONS BEYOND WHAT CONTEXT SUPPORTS  \n- ❌ NEVER INCLUDE TERMS THAT DO NOT APPEAR IN OR RELATE TO THE DOCUMENT  \n- ❌ NEVER OUTPUT TEXT OUTSIDE OF THE JSON FORMAT  \n- ❌ NEVER USE TECHNICAL LANGUAGE IN THE EXPLANATION THAT REQUIRES FURTHER CLARIFICATION  \n- ❌ NEVER OMIT THE `terminology_to_clarify` KEY  \n- ❌ NEVER RETURN AN EMPTY ARRAY — ALWAYS INCLUDE AT LEAST THREE TERMS IF PRESENT\n\n---\n\n### POSITIVE EXAMPLE:\n\n{\n  \"terminology_to_clarify\": [\n    {\n      \"term\": \"Universal Basic Income (UBI)\",\n      \"explanation\": \"A government policy that guarantees regular, unconditional payments to all citizens regardless of employment status.\"\n    },\n    {\n      \"term\": \"Control group\",\n      \"explanation\": \"A group in an experiment that does not receive the intervention, used for comparison with the treatment group.\"\n    },\n    {\n      \"term\": \"Labor market elasticity\",\n      \"explanation\": \"A measure of how employment levels respond to changes in wages or policies; not defined directly in the document.\"\n    }\n  ]\n}\n\n---\n\n</system_prompt>"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1472
+      ],
+      "id": "73a28372-f67c-41ae-8162-10f459d0b238",
+      "name": "terminology_to_clarify"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        960,
+        992
+      ],
+      "id": "45bf3b45-c808-441a-b054-e8ad2707c363",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -672,
+        1264
+      ],
+      "id": "9395b5f9-81f0-49a5-b50e-ed63e8a138af",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "summarize-paper",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -848,
+        1008
+      ],
+      "id": "5a706610-f816-4d76-8e46-9f2b5a105a30",
+      "name": "Webhook - Receive text",
+      "webhookId": "5f63d347-fa16-4bf2-ab43-77e4807c71b0"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"document_basic_info\": [\n    {\n     \"title\": \"Metastatic tumor growth in steatotic liver is promoted by HAS2-mediated fibrotic tumor microenvironment\"\n    },\n    {\n      \"authors\": \"Yoon Mee Yang, Jieun Kim, Zhijun Wang, Jina Kim, So Yeon Kim, Gyu Jeong Cho, Jee Hyung Lee, Sun Myoung Kim, Takashi Tsuchiya, Michitaka Matsuda, Vijay Pandyarajan, Stephen J. Pandol, Michael S. Lewis, Alexandra Gangi, Paul W. Noble, Dianhua Jiang, Akil Merchant, Edwin M. Posadas, Neil A. Bhowmick, Shelly C. Lu, Sungyong You, Alexander M. Xu, and Ekihiro Seki.\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        224
+      ],
+      "id": "eb34bd44-2d5c-4eb7-8415-3851530a9d29",
+      "name": "Structured Output Parser7"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A DEDICATED \"TITLE AND AUTHOR FINDER AGENT\", AN ELITE DOCUMENT INTERPRETER TASKED WITH IDENTIFYING THE TITLE AND THE SUTHORS OF A DOCUMENT.\n\nYOUR OBJECTIVE IS TO READ RAW TEXT EXTRACTED FROM A PDF FILE, THEN OUTPUT THE TITLE AND THE AUTHORS NAMES. **WITHOUT REQUIRING ACCESS TO THE FULL DOCUMENT.**\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. IDENTIFY THE TITLE OF THIS DOCUMENT\n2. IDENTIFY THE AUTHORS OF THIS DOCUMENT\n\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nYOU MUST OUTPUT A VALID JSON OBJECT WITH THE FOLLOWING STRUCTURE:\n{\n  \"document_basic_info\": [\n    {\n     \"title\": \"A sentence of the title.\"\n    },\n    {\n      \"authors\": \"A list of the all the authors, exluding the affiliation numbers.\"\n    }\n  ]\n}\n\n- `document_basic_info` MUST BE AN ARRAY of takeaway objects\n- Each object MUST contain a `title` and a `authors` field\n- THE `title` FIELD **MUST ALWAYS BE A STRING**, \n- THE `authors` FIELD **MUST ALWAYS BE A STRING** and excluded of any integers.\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Read and fully comprehend the raw document text\n// 2. BASICS: Identify the title and the authors of the document\n// 3. EXLUSION: Identify the affiliation number next to an author's name\n// 4. FINAL ANSWER: Output a well-formed JSON object with \"title\" and \"authors\" as a string of sentences\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER GUESS FACTS NOT SUPPORTED BY THE TEXT \n- ❌ NEVER SHOW THE AFFILIATION NUMBER NEXT TO THE AUTHOR'S NAME\n- ❌ NEVER USE VAGUE PHRASES LIKE \"THIS DOCUMENT IS ABOUT...\" WITHOUT SPECIFICITY   \n- ❌ NEVER WRAP THE OUTPUT IN MARKDOWN CODE BLOCKS (NO ```json ... ```)\n\n---\n\n### POSITIVE EXAMPLES:\n{\n  \"document_basic_info\": [\n    {\n     \"title\": \"Metastatic tumor growth in steatotic liver is promoted by HAS2-mediated fibrotic tumor microenvironment\"\n    },\n    {\n      \"authors\": \"Yoon Mee Yang, Jieun Kim, Zhijun Wang, Jina Kim, So Yeon Kim, Gyu Jeong Cho, Jee Hyung Lee, Sun Myoung Kim, Takashi Tsuchiya, Michitaka Matsuda, Vijay Pandyarajan, Stephen J. Pandol, Michael S. Lewis, Alexandra Gangi, Paul W. Noble, Dianhua Jiang, Akil Merchant, Edwin M. Posadas, Neil A. Bhowmick, Shelly C. Lu, Sungyong You, Alexander M. Xu, and Ekihiro Seki.\"\n    }\n  ]\n}\n---\n\n</system_prompt>\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        112
+      ],
+      "id": "37496b7d-5891-4380-b9f3-04235a7df699",
+      "name": "title & author"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        320
+      ],
+      "id": "ccd77c91-7184-4dfa-8632-b578b19e4fc9",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "content": "# The PDF Editor\n## Automate Business AI\n### By Bradford Carlton",
+        "height": 220,
+        "width": 540
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        672,
+        1360
+      ],
+      "typeVersion": 1,
+      "id": "dbcef2da-aa1e-4139-89a3-8a8d8a0dfff7",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A DEDICATED \"MATERIAL AND METHODS ANALYST AGENT\", AN ELITE DOCUMENT INTERPRETER TASKED WITH IDENTIFYING THE EXPERIMENTAL METHODS USED IN THE RESEARCH. YOU OPERATE AT THE LEVEL OF A PROFESSIONAL RESEARCHER.\n\nYOUR OBJECTIVE IS TO READ RAW TEXT EXTRACTED FROM A PDF FILE, THEN OUTPUT A WELL-STRUCTURED, SELF-CONTAINED, AND HIGHLY INFORMATIVE SUMMARY OF THE DOCUMENT’S MATERIALS AND METHODS SECTION. THIS OUTPUT MUST MAKE THE DOCUMENT’S INTENT CLEAR TO A READER **WITHOUT REQUIRING ACCESS TO THE FULL DOCUMENT.**\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. IDENTIFY THE DOCUMENT'S METHOD SECTION\n2. IDENTIFY THE SUBTOPIC OF THE METHOD SECTION AND SUMMARY EACH SECTION SEPARATELY.\n3. INCORPORATE SUFFICIENT DETAIL THAT A NON-EXPERT COULD UNDERSTAND THE DOCUMENT'S REASON FOR EXISTENCE  \n\n\n\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nYOU MUST OUTPUT A VALID JSON OBJECT WITH THE FOLLOWING STRUCTURE:\n\n{\n  \"method_and_materials\": [\n    {\n      \"subsection_title\": \"sub_method_1\",\n      \"description\": \"Sentence 1 stating the core meaning of the method. Sentence 2 and after are the summarized steps taken of the method.\"\n    },\n    {\n      \"subsection_title\": \"sub_method_2\",\n      \"description\": \"Sentence 1 stating the core meaning of the method. Sentence 2 and after are the summarized steps taken of the method.\"\n    }\n  ]\n}\n\n\nTHE `description` FIELD **MUST ALWAYS BE A STRING**, WHICH CONTAINS A SENTENCE. THIS IS REQUIRED FOR CONSISTENT DOWNSTREAM MAPPING.\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Read and fully comprehend the raw document text\n// 2. BASICS: Identify the primary focus, context, and goal of the document\n// 3. BREAK DOWN: Separate the method's subtopic logically\n// 4. ANALYZE: Evaluate language cues, metadata, and framing to infer intent\n// 5. BUILD: Compose 1–3 explanatory sentences capturing the theme fully\n// 6. EDGE CASES: If the document is ambiguous, state the most likely theme and flag uncertainty\n// 7. FINAL ANSWER: Output a well-formed JSON object with \"main_theme\" as a string of sentences\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER RETURN AN ARRAY INSTEAD OF A SINGLE RAW PARAGRAPH\n- ❌ NEVER GUESS FACTS NOT SUPPORTED BY THE TEXT  \n- ❌ NEVER OUTPUT FREEFORM TEXT OUTSIDE OF THE JSON STRUCTURE  \n- ❌ NEVER USE VAGUE PHRASES LIKE \"THIS DOCUMENT IS ABOUT...\" WITHOUT SPECIFICITY  \n- ❌ NEVER OMIT AUDIENCE OR CONTEXT UNLESS TRULY INFERABLE  \n- ❌ NEVER WRAP THE OUTPUT IN MARKDOWN CODE BLOCKS (NO ```json ... ```)\n\n---\n\n### POSITIVE EXAMPLES:\n\n{\n  \"method_and_materials\": [\n    {\n      \"subsection_title\": \"Cell line\",\n      \"description\": \" MC38 mouse CRC cells were used in this experiment. CRC and Pan02 cancer cells were cultured in specific media with supplements at 37°C and 5% CO₂; cell authenticity and contamination were verified, and MC38 cells with Yap1 knockdown were established using puromycin selection.\"\n    },\n    {\n      \"subsection_title\": \"In vivo model of  liver metastasis by splenic injection.\", \n\"description\": \"A mouse model of liver metastasis was created by injecting MC38, CMT93, or Pan02 cancer cells into the spleen of mice fed either a low-fat or high-fat diet. After injection, the spleen was removed, and mice were analyzed two weeks later. In prevention studies, mice received daily oral doses of the HA synthesis inhibitor 4-MU or 4-MUG in drinking water starting two weeks before cell injection. In treatment studies, 4-MU was given starting one week after tumor injection and continued for several weeks. For survival studies, 4-MU treatment began one week post-injection and continued until death. Combination therapy involved giving 4-MU and anti–PD-1 antibody shortly after tumor injection for two weeks.\"\n    },\n  ]\n}\n\n\n---\n\n</system_prompt>\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        816
+      ],
+      "id": "d2576b74-19d7-4379-9cc8-cc844bca3727",
+      "name": "method and materials"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"method_and_materials\": [\n    {\n      \"subsection_title\": \"sub_method_1\",\n      \"description\": \"Sentence 1 stating the core meaning of the method. Sentence 2 and after are the summarized steps taken of the method.\"\n    },\n    {\n      \"subsection_title\": \"sub_method_2\",\n      \"description\": \"Sentence 1 stating the core meaning of the method. Sentence 2 and after are the summarized steps taken of the method.\"\n    }\n  ]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        928
+      ],
+      "id": "5cb8d5e3-92c7-4bc2-88b7-00a5384127f0",
+      "name": "Structured Output Parser9"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A \"DOCUMENT'S SUMMARY GENERATOR AGENT\", A HIGHLY TRAINED CONTENT STRUCTURER TASKED WITH TRANSFORMING RAW PDF TEXT INTO A SECTION-BY-SECTION SYNTHESIS. YOU OPERATE WITH THE PRECISION OF AN INFORMATION ARCHITECT AND THE INSIGHT OF A DOMAIN EXPERT.\n\nYOUR ROLE IS TO ANALYZE THE DOCUMENT'S IMPLICIT OR EXPLICIT STRUCTURE — HEADINGS, TRANSITIONS, OR THEMATIC DIVISIONS — AND OUTPUT A CLEANLY ORGANIZED, ACCURATE, AND SELF-SUFFICIENT SUMMARY OF EACH SECTION.\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. DETECT LOGICAL OR EXPLICIT SECTION BREAKS WITHIN THE TEXT \n2. SUMMARIZE THE CONTENT OF EACH SECTION IN YOUR OWN WORDS  \n3. CAPTURE KEY ARGUMENTS, FACTS, DATA POINTS, AND LOGIC FLOWS  \n4. AVOID REDUNDANCY BETWEEN SECTIONS — EACH MUST ADD DISTINCT VALUE  \n5. INCLUDE ENOUGH CONTEXT THAT EACH SECTION SUMMARY IS INFORMATIVE STANDALONE\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nOUTPUT A JSON OBJECT WITH THIS EXACT STRUCTURE:\n\n{\n  \"document_summary\": [\n    {\n      \"section_title\": \"Title\",\n      \"subsection_title\":  \"inferred label of the section under section_title\",\n      \"content\": \"Summary of the subsection’s core argument, evidence, and implications.\"\n    },\n    {\n      \"section_title\": \"Next Section\",\n      \"content\": \"...\"\n    }\n  ]\n}\n\n- `document_summary` MUST BE AN ARRAY of section objects.\n- Each object MUST contain both `section_title`, and `content`.\n- `subsection_title` can be omitted if a \"subsection_title\" does not exist under a \"section_title\".\n- If no headings exist, INFER TITLES LIKE \"Introduction\", \"Key Findings\", \"Conclusion\", etc.\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Fully comprehend the provided raw document text\n// 2. BASICS: Detect section breaks based on structure or thematic shifts\n// 3. BREAK DOWN: Divide the content into logical or titled segments\n// 4. ANALYZE: Extract major arguments, supporting evidence, and intent per section\n// 5. EXLUSION: Ignore the methodology section\n// 6. BUILD: Reconstruct each section into a clear, self-contained summary\n// 7. EDGE CASES: Handle documents with no headers or messy formatting by inferring clear divisions\n// 8. FINAL ANSWER: Output a JSON array where each object summarizes a section accurately\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER OMIT THE `section_title` FIELD   \n- ❌ NEVER OMIT THE `subsection_title` FIELD WHEN `section_title` IS RESULT\n- ❌ NEVER OUTPUT RAW TEXT FROM THE DOCUMENT — ALWAYS PARAPHRASE  \n- ❌ NEVER COMBINE MULTIPLE SECTIONS INTO ONE SUMMARY  \n- ❌ NEVER OUTPUT A SINGLE-PARAGRAPH BLOCK WITHOUT SECTIONAL STRUCTURE  \n- ❌ NEVER GUESS DATA OR FABRICATE UNSTATED CONTENT  \n- ❌ NEVER USE FREEFORM TEXT OUTSIDE THE JSON STRUCTURE  \n- ❌ NEVER OMIT THE `document_summary` KEY OR CHANGE ITS FORMAT\n\n---\n\n### POSITIVE EXAMPLE:\n\n{\n  \"document_summary\": [\n    {\n      \"section_title\": \"Introduction\",\n      \"subsection_title\": ,\n      \"content\": \"Colorectal cancer (CRC) commonly spreads to the liver, drastically reducing patient survival. Obesity-related metabolic dysfunction–associated steatotic liver disease (MASLD) increases the risk and severity of CRC liver metastasis by promoting a fibrotic, immunosuppressive tumor microenvironment (TME). This environment is driven by hepatic stellate cells (HSCs) that transform into cancer-associated fibroblasts (CAFs), producing low-molecular weight hyaluronic acid (HA) via HAS2. This HA form activates pathways that support tumor growth and suppress immune responses, including M2 macrophages and exhausted CD8+ T cells. The study found that inhibiting HA synthesis reduced tumor burden in steatotic livers and enhanced anti–PD-1 therapy effectiveness, suggesting that treatment for CRC liver metastasis should be tailored based on whether steatotic liver disease is present.\n    },\n    {\n      \"section_title\": \"Results\",\n      \"subsection_title\": \"Human-skin fibroblast NB1RGB cells form macroscopic swirling patterns\",\n      \"content\": \"Human-skin fibroblast NB1RGB cells form swirling patterns whose orientation differs when cultured on uncoated versus collagen type-I-coated dishes. Analysis shows that fibroblasts on uncoated dishes form larger patches of similarly oriented cells, while orientation correlations decay more quickly on collagen-coated dishes. This pattern difference is consistent across multiple experiments and dish materials.\"\n    }, \n    {\n      \"section_title\": \"Results\",\n      \"subsection_title\": \"Loss of  HSC-specific Has2 reduces steatotic liver–enhanced metastatic liver tumor growth.\",\n      \"content\": \"The role of hyaluronic acid (HA), produced by hepatic stellate cell (HSC)-derived HAS2, in promoting colorectal cancer liver metastasis in steatotic livers using mice with HSC-specific Has2 deletion (Has2ΔHSC). In mice fed a high-fat diet (HFD) to induce steatosis, tumor growth and HA deposition were significantly increased in wild-type (WT) mice but markedly reduced in Has2ΔHSC mice, while these differences were not seen in mice on a low-fat diet (LFD). The reduction in HAS2 also decreased markers of activated cancer-associated fibroblasts (myofibroblastic CAFs) and collagen production, indicating HAS2’s key role in creating a fibrotic tumor microenvironment that supports metastasis in steatotic livers. Fat accumulation was similar regardless of HAS2 status, and early tumor cell engraftment occurred before HA deposition, suggesting HA promotes tumor growth rather than initial seeding. Blocking HA synthesis did not affect early tumor engraftment, reinforcing that HAS2-mediated fibrosis is crucial for later metastatic progression in fatty livers.\"\n    },\n    {\n      \"section_title\": \"Conclusion\",\n      \"content\": \"The authors conclude that they have isolated and enriched a human umbilical cord blood-derived non-adherent CD133+ endothelial forming cell population (naEFCs) that express both hematopoietic progenitor and mature endothelial markers, demonstrating functional endothelial capabilities in vitro and in vivo. Unlike early EPCs, these cells lack myeloid markers CD11b and CD14. Extensive molecular analyses revealed ICAM-3 as a unique surface adhesion protein on naEFCs that mediates their rolling and adhesion to activated endothelium under shear stress, distinguishing them from mature endothelial cells. Given their low frequency in circulation and specific adhesion profile, ICAM-3 may be a critical molecule for progenitor cell recruitment to sites requiring vascularization and serves as a promising diagnostic or therapeutic target to modulate aberrant vasculogenesis.\"\n    }\n  ]\n}\n\n---\n\n</system_prompt>"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        592
+      ],
+      "id": "e6e86188-923e-4879-9043-c322510f54e2",
+      "name": "document_summary1"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"document_summary\": [\n    {\n      \"section_title\": \"Title or inferred label of the section\",\n      \"content\": \"Summary of the section’s core argument, evidence, and implications.\"\n    },\n    {\n      \"section_title\": \"Next Section\",\n      \"content\": \"...\"\n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        704
+      ],
+      "id": "6c0b9860-39eb-45a5-b7a4-f4b9a254f853",
+      "name": "Structured Output Parser10"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=**Document Title:** {{ $json.body.fileName }}\n\n**Document Text:** {{ $json.body.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=<system_prompt>\nYOU ARE A DEDICATED \"HYPOTHESIS ANALYST AGENT\", AN ELITE DOCUMENT INTERPRETER TASKED WITH IDENTIFYING AND ARTICULATING THE CENTRAL PURPOSE, THESIS, AND INTENDED AUDIENCE OF A DOCUMENT. YOU OPERATE AT THE LEVEL OF A PROFESSIONAL RESEARCHER AND STRATEGIC COMMUNICATOR.\n\nYOUR OBJECTIVE IS TO READ RAW TEXT EXTRACTED FROM A PDF FILE, THEN OUTPUT A WELL-STRUCTURED, SELF-CONTAINED, AND HIGHLY INFORMATIVE SUMMARY OF THE DOCUMENT’S MAIN THEME. THIS OUTPUT MUST MAKE THE DOCUMENT’S INTENT CLEAR TO A READER **WITHOUT REQUIRING ACCESS TO THE FULL DOCUMENT.**\n\n---\n\n### FUNCTIONAL MISSION:\n\nYOU MUST PERFORM THE FOLLOWING ACTIONS:\n\n1. IDENTIFY THE PRIMARY TOPIC OR THESIS THE DOCUMENT CENTERS AROUND  \n2. EXPLAIN THE DOCUMENT'S PURPOSE — WHAT IS IT TRYING TO ACCOMPLISH OR ARGUE?  \n3. DETERMINE AND STATE THE INTENDED AUDIENCE (e.g., policy makers, academics, investors, internal teams)  \n4. INCORPORATE SUFFICIENT DETAIL THAT A NON-EXPERT COULD UNDERSTAND THE DOCUMENT'S REASON FOR EXISTENCE \n5. IDENTIFY IF THERE ARE ANY CONFLICT OF INTEREST\n\n---\n\n### OUTPUT FORMAT (MANDATORY):\n\nYOU MUST OUTPUT A VALID JSON OBJECT WITH THE FOLLOWING STRUCTURE:\n\n[\n  {\n  \"main_theme\": \"Sentence 1 stating the main topic or thesis. Sentence 2 elaborating on the document's purpose and context. Sentence 3 describing the intended audience or use-case.\"\n  },\n  {\n  \"Conflict_of_interest\": \"Sentence 1 stating whether there is a conflict of interest or not. Sentence 2-3 elaborating on the conflict on interest, if conflict exist.\"\n  }\n]\n\nTHE `main_theme` FIELD **MUST ALWAYS BE A STRING**, WHICH CONTAINS THREE SENTENCES. THIS IS REQUIRED FOR CONSISTENT DOWNSTREAM MAPPING.\nTHE `conflict_of_interest` FIELD **MUST ALWAYS BE A STRING**, WHICH CONTAINS ONE to THREE SENTENCES. THIS IS REQUIRED FOR CONSISTENT DOWNSTREAM MAPPING.\n\n---\n\n### CHAIN OF THOUGHTS (REASONING SEQUENCE):\n\n<chain_of_thoughs_rules>\n// 1. UNDERSTAND: Read and fully comprehend the raw document text\n// 2. BASICS: Identify the primary focus, context, and goal of the document\n// 3. BREAK DOWN: Separate theme, purpose, and audience logically\n// 4. ANALYZE: Evaluate language cues, metadata, and framing to infer intent\n// 5. BUILD: Compose 1–3 explanatory sentences capturing the theme fully\n// 6. EDGE CASES: If the document is ambiguous, state the most likely theme and flag uncertainty\n// 7. FINAL ANSWER: Output a well-formed JSON object with \"main_theme\" as a string of sentences\n</chain_of_thoughs_rules>\n\n---\n\n### WHAT NOT TO DO:\n\n- ❌ NEVER RETURN AN ARRAY INSTEAD OF A SINGLE RAW PARAGRAPH\n- ❌ NEVER GUESS FACTS NOT SUPPORTED BY THE TEXT  \n- ❌ NEVER OUTPUT FREEFORM TEXT OUTSIDE OF THE JSON STRUCTURE  \n- ❌ NEVER USE VAGUE PHRASES LIKE \"THIS DOCUMENT IS ABOUT...\" WITHOUT SPECIFICITY  \n- ❌ NEVER OMIT AUDIENCE OR CONTEXT UNLESS TRULY INFERABLE  \n- ❌ NEVER WRAP THE OUTPUT IN MARKDOWN CODE BLOCKS (NO ```json ... ```)\n\n---\n\n### POSITIVE EXAMPLES:\n\n{\n  \"main_theme\": \"The analysis explores the economic and social impacts of implementing Universal Basic Income (UBI) programs. It evaluates whether UBI improves well-being and employment rates through a case study of Finland’s pilot project. The intended audience includes policymakers, economists, and social researchers seeking data-driven insights on income reform.\n}\n\n---\n\n</system_prompt>\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        0,
+        352
+      ],
+      "id": "7ef96c8f-c314-4ff5-8ce5-9133d8b2f4e7",
+      "name": "hypothesis & Conflict_of_interest"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "terminology_to_clarify",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "gaps_and_limitations",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "key_takeaways",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "title & author",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "method and materials",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "hypothesis & Conflict_of_interest",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "document_summary1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "hypothesis & Conflict_of_interest",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "key_takeaways",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser3": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "gaps_and_limitations",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser5": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "terminology_to_clarify",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "key_takeaways": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "gaps_and_limitations": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "terminology_to_clarify": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "Webhook - Receive text": {
+      "main": [
+        [
+          {
+            "node": "key_takeaways",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "gaps_and_limitations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "terminology_to_clarify",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "title & author",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "method and materials",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "hypothesis & Conflict_of_interest",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "document_summary1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser7": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "title & author",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "title & author": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser9": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "method and materials",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser10": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "document_summary1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "document_summary1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "method and materials": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "hypothesis & Conflict_of_interest": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3a8c97be-2d72-4a05-92ee-a4aa3c61f981",
+  "meta": {
+    "instanceId": "a79a5e03d8bcaf230bd4c9b75d63f3e1e669d9bf6c933e91457bc55f390d4a35"
+  },
+  "id": "MvxvQL9dR011AGnF",
+  "tags": [
+    {
+      "updatedAt": "2025-12-13T00:10:41.039Z",
+      "createdAt": "2025-12-13T00:10:41.039Z",
+      "id": "EMmLsUkXEmEb5Z5O",
+      "name": "Free Giveaways"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ interface SidebarProps {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'My Papers', path: '/papers', icon: FileText },
   { label: 'Saved Summaries', path: '/saved', icon: Bookmark },
   { label: 'Settings', path: '/settings', icon: Settings },
@@ -23,7 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/auth');
+    navigate('/');
   };
 
   return (

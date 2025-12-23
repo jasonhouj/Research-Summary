@@ -78,12 +78,19 @@ export function extractPaperMetadata(pdfText: string): { title: string; authors:
     // Split text and find first substantial line
     const lines = pdfText.split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
 
-    for (let i = 0; i < Math.min(15, lines.length); i++) {
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
       const line = lines[i];
 
       // Skip metadata lines
       if (line.length < 15 || line.length > 300) continue;
       if (/^(Vol\.|Volume|Issue|DOI:|http|www\.|©|Copyright|\d{4}$)/i.test(line)) continue;
+
+      // Skip journal names and article type headers
+      if (/journal|clinical investigation|research\s*article|original\s*article|review\s*article|J\s*Clin\s*Invest/i.test(line)) continue;
+      if (/https?:\/\/|doi\.org/i.test(line)) continue;
+
+      // Skip lines that are mostly formatting/spacing
+      if (/^[A-Z\s]{10,}$/.test(line) && line.includes('  ')) continue;
 
       // Found potential title
       title = line;
@@ -202,24 +209,43 @@ const getWebhookUrl = () => {
 export interface PDFSummarizerResponse {
   // Aggregated data from all AI agents
   data: Array<{
+    // From hypothesis & conflict_of_interest node
     main_theme?: string;
+    conflict_of_interest?: string;
+    Conflict_of_interest?: string; // Alternative casing from n8n
+    // From document_summary1 node
     document_summary?: Array<{
       section_title: string;
+      subsection_title?: string;
       content: string;
     }>;
+    // From key_takeaways node
     key_takeaways?: Array<{
       point: string;
       context: string;
     }>;
+    // From gaps_and_limitations node
     gaps_and_limitations?: Array<{
       issue: string;
       reason: string;
     }>;
-    follow_up_questions?: string[];
+    // From terminology_to_clarify node
     terminology_to_clarify?: Array<{
       term: string;
       explanation: string;
     }>;
+    // From method and materials node
+    method_and_materials?: Array<{
+      subsection_title: string;
+      description: string;
+    }>;
+    // From title & author node
+    document_basic_info?: Array<{
+      title?: string;
+      authors?: string;
+    }>;
+    // Legacy fields
+    follow_up_questions?: string[];
     structural_observations?: string[];
   }>;
 }
@@ -255,6 +281,12 @@ export interface N8nGeminiResponse {
     fullTextLength: number;
     aiModel: string;
   };
+  // Extended fields from n8n workflow nodes
+  keyTakeaways?: Array<{ point: string; context: string }>;
+  terminologyToClarify?: Array<{ term: string; explanation: string }>;
+  gapsAndLimitations?: Array<{ issue: string; reason: string }>;
+  methodSections?: Array<{ subsection_title: string; description: string }>;
+  documentSections?: Array<{ section_title: string; subsection_title?: string; content: string }>;
 }
 
 export async function triggerPaperSummary(
@@ -339,8 +371,13 @@ function convertPDFSummarizerResponse(
   // Extract data from each AI agent's output
   // Note: n8n wraps each agent's output in an "output" object
   let mainTheme = '';
-  let documentSummary: Array<{ section_title: string; content: string }> = [];
+  let conflictOfInterest = '';
+  let documentSummary: Array<{ section_title: string; subsection_title?: string; content: string }> = [];
   let keyTakeaways: Array<{ point: string; context: string }> = [];
+  let terminologyToClarify: Array<{ term: string; explanation: string }> = [];
+  let gapsAndLimitations: Array<{ issue: string; reason: string }> = [];
+  let methodAndMaterials: Array<{ subsection_title: string; description: string }> = [];
+  let documentBasicInfo: Array<{ title?: string; authors?: string }> = [];
 
   for (const item of data) {
     // Handle both direct properties and nested "output" wrapper
@@ -352,13 +389,35 @@ function convertPDFSummarizerResponse(
       mainTheme = output.main_theme as string;
       console.log('Found main_theme:', mainTheme.substring(0, 100));
     }
+    // Extract conflict_of_interest from hypothesis & conflict_of_interest node
+    // Note: The n8n node outputs it as "Conflict_of_interest" (capital C)
+    if (output.conflict_of_interest || output.Conflict_of_interest) {
+      conflictOfInterest = (output.conflict_of_interest || output.Conflict_of_interest) as string;
+      console.log('Found conflict_of_interest:', conflictOfInterest.substring(0, 100));
+    }
     if (output.document_summary) {
-      documentSummary = output.document_summary as Array<{ section_title: string; content: string }>;
+      documentSummary = output.document_summary as Array<{ section_title: string; subsection_title?: string; content: string }>;
       console.log('Found document_summary sections:', documentSummary.length);
     }
     if (output.key_takeaways) {
       keyTakeaways = output.key_takeaways as Array<{ point: string; context: string }>;
       console.log('Found key_takeaways:', keyTakeaways.length);
+    }
+    if (output.terminology_to_clarify) {
+      terminologyToClarify = output.terminology_to_clarify as Array<{ term: string; explanation: string }>;
+      console.log('Found terminology_to_clarify:', terminologyToClarify.length);
+    }
+    if (output.gaps_and_limitations) {
+      gapsAndLimitations = output.gaps_and_limitations as Array<{ issue: string; reason: string }>;
+      console.log('Found gaps_and_limitations:', gapsAndLimitations.length);
+    }
+    if (output.method_and_materials) {
+      methodAndMaterials = output.method_and_materials as Array<{ subsection_title: string; description: string }>;
+      console.log('Found method_and_materials:', methodAndMaterials.length);
+    }
+    if (output.document_basic_info) {
+      documentBasicInfo = output.document_basic_info as Array<{ title?: string; authors?: string }>;
+      console.log('Found document_basic_info:', documentBasicInfo);
     }
   }
 
@@ -400,18 +459,44 @@ function convertPDFSummarizerResponse(
   const keyFindingsFromTakeaways = keyTakeaways.map(t => t.point).slice(0, 5);
   console.log('Key findings extracted:', keyFindingsFromTakeaways);
 
-  // Use extracted metadata for title and authors, with fallbacks
-  const paperTitle = extractedMetadata.title !== 'Title not found'
-    ? extractedMetadata.title
-    : fileName.replace('.pdf', '').replace(/[_-]/g, ' ');
-  const paperAuthors = extractedMetadata.authors.length > 0
-    ? extractedMetadata.authors
-    : [];
+  // Extract title and authors from title & author node output (priority)
+  // Then fall back to extractedMetadata from PDF text parsing
+  let paperTitle = fileName.replace('.pdf', '').replace(/[_-]/g, ' ');
+  let paperAuthors: string[] = [];
 
-  console.log('Using paper title:', paperTitle);
-  console.log('Using paper authors:', paperAuthors);
+  // First try the title & author node output
+  if (documentBasicInfo.length > 0) {
+    for (const info of documentBasicInfo) {
+      if (info.title && info.title.trim()) {
+        paperTitle = info.title.trim();
+        console.log('Using title from title & author node:', paperTitle);
+      }
+      if (info.authors && info.authors.trim()) {
+        // Parse authors string into array
+        const authorsStr = info.authors.trim();
+        paperAuthors = authorsStr
+          .split(/,\s*(?:and\s+)?|(?:\s+and\s+)/i)
+          .map(a => a.trim())
+          .filter(a => a.length > 0);
+        console.log('Using authors from title & author node:', paperAuthors);
+      }
+    }
+  }
 
-  const result: N8nGeminiResponse & { keyTakeaways?: Array<{ point: string; context: string }> } = {
+  // Fallback to extractedMetadata if no title/authors from n8n
+  if (paperTitle === fileName.replace('.pdf', '').replace(/[_-]/g, ' ') && extractedMetadata.title !== 'Title not found') {
+    paperTitle = extractedMetadata.title;
+    console.log('Fallback to extracted metadata title:', paperTitle);
+  }
+  if (paperAuthors.length === 0 && extractedMetadata.authors.length > 0) {
+    paperAuthors = extractedMetadata.authors;
+    console.log('Fallback to extracted metadata authors:', paperAuthors);
+  }
+
+  console.log('Final paper title:', paperTitle);
+  console.log('Final paper authors:', paperAuthors);
+
+  const result: N8nGeminiResponse = {
     success: true,
     paper: {
       title: paperTitle,
@@ -424,7 +509,7 @@ function convertPDFSummarizerResponse(
       results,
       discussion,
       conclusion,
-      conflictOfInterest: 'No conflict of interest information extracted.',
+      conflictOfInterest: conflictOfInterest || '',
     },
     sectionsFound: {
       introduction: introduction !== 'Section not found in document.',
@@ -432,7 +517,7 @@ function convertPDFSummarizerResponse(
       results: results !== 'Section not found in document.',
       discussion: discussion !== 'Section not found in document.',
       conclusion: conclusion !== 'Section not found in document.',
-      conflictOfInterest: false,
+      conflictOfInterest: !!conflictOfInterest,
     },
     metadata: {
       generatedAt: new Date().toISOString(),
@@ -441,8 +526,12 @@ function convertPDFSummarizerResponse(
       fullTextLength: 0,
       aiModel: 'OpenAI GPT-4.1-mini (via n8n PDF Summarizer)',
     },
-    // Store key takeaways for later use
+    // Extended fields from all n8n nodes
     keyTakeaways: keyTakeaways,
+    terminologyToClarify: terminologyToClarify,
+    gapsAndLimitations: gapsAndLimitations,
+    methodSections: methodAndMaterials,
+    documentSections: documentSummary,
   };
 
   console.log('Converted response:', JSON.stringify(result, null, 2).substring(0, 1000));
@@ -454,9 +543,8 @@ export function isN8nConfigured(): boolean {
 }
 
 // Convert n8n response to our database format
-export function convertToSummaryFormat(n8nResponse: N8nGeminiResponse & { keyTakeaways?: Array<{ point: string; context: string }> }) {
-  // Create results array from the discussion section
-  // Since your workflow has separate results and discussion, we combine them
+export function convertToSummaryFormat(n8nResponse: N8nGeminiResponse) {
+  // Create results array from the discussion section (legacy format)
   const results = [];
 
   if (n8nResponse.sectionsFound.results) {
@@ -478,15 +566,33 @@ export function convertToSummaryFormat(n8nResponse: N8nGeminiResponse & { keyTak
     keyFindings = extractKeyFindings(n8nResponse);
   }
 
-  // Only include fields that exist in the database schema
-  // Database has: hypothesis, introduction, methodology, results, conclusion, key_findings
+  // Filter document sections for Results and Discussion separately
+  const documentSections = n8nResponse.documentSections || [];
+
+  const resultsSections = documentSections.filter(s => {
+    const title = s.section_title?.toLowerCase() || '';
+    return title.includes('result') || title.includes('finding') || title.includes('outcome');
+  });
+
+  const discussionSections = documentSections.filter(s => {
+    const title = s.section_title?.toLowerCase() || '';
+    return title.includes('discussion') || title.includes('interpretation') || title.includes('implication');
+  });
+
+  // Build summary data with all fields
   const summaryData = {
     hypothesis: extractHypothesis(n8nResponse),
     introduction: n8nResponse.summaries.introduction,
     methodology: n8nResponse.summaries.methods,
+    method_sections: n8nResponse.methodSections || [],
     results: results,
+    results_sections: resultsSections,
+    discussion_sections: discussionSections,
     conclusion: n8nResponse.summaries.conclusion,
-    key_findings: keyFindings
+    key_findings: keyFindings,
+    terminology_to_clarify: n8nResponse.terminologyToClarify || [],
+    gaps_and_limitations: n8nResponse.gapsAndLimitations || [],
+    conflict_of_interest: n8nResponse.summaries.conflictOfInterest || ''
   };
 
   console.log('Final summary data for database:', summaryData);
