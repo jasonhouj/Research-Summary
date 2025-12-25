@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, Bookmark, Settings, LogOut, ChevronLeft } from 'lucide-react';
+import { LayoutDashboard, FileText, Bookmark, Settings, LogOut, ChevronLeft, Search } from 'lucide-react';
 import { NavItem } from '../types';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -12,8 +12,9 @@ interface SidebarProps {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { label: 'My Papers', path: '/papers', icon: FileText },
-  { label: 'Saved Summaries', path: '/saved', icon: Bookmark },
+  { label: 'My Summaries', path: '/papers', icon: FileText },
+  { label: 'Find Papers', path: '/search', icon: Search },
+  { label: 'Saved Papers', path: '/saved', icon: Bookmark },
   { label: 'Settings', path: '/settings', icon: Settings },
 ];
 

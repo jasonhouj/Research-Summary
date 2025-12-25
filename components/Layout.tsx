@@ -9,8 +9,11 @@ interface LayoutProps {
 
 const getTitleFromPath = (path: string) => {
   if (path === '/') return 'Dashboard';
+  if (path === '/dashboard') return 'Dashboard';
   if (path.startsWith('/paper')) return 'Paper Summary';
-  if (path === '/papers') return 'My Papers';
+  if (path === '/papers') return 'My Summaries';
+  if (path === '/search') return 'Find Papers';
+  if (path === '/saved') return 'Saved Papers';
   if (path === '/settings') return 'Settings';
   return 'Dashboard';
 }

@@ -39,7 +39,16 @@ export const MyPapers: React.FC = () => {
     const [editMode, setEditMode] = useState(false);
     const [editedFolderNames, setEditedFolderNames] = useState<Record<string, string>>({});
     const [editedFolderColors, setEditedFolderColors] = useState<Record<string, FolderColor>>({});
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+        const saved = localStorage.getItem('summaries-view-mode');
+        return (saved === 'list' || saved === 'grid') ? saved : 'grid';
+    });
+
+    // Persist view mode preference
+    const handleViewModeChange = (mode: 'grid' | 'list') => {
+        setViewMode(mode);
+        localStorage.setItem('summaries-view-mode', mode);
+    };
 
     useEffect(() => {
         if (user) {
@@ -213,7 +222,7 @@ export const MyPapers: React.FC = () => {
         <div className="max-w-7xl mx-auto pb-12">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="font-display text-3xl font-bold text-charcoal">My Papers</h1>
+                    <h1 className="font-display text-3xl font-bold text-charcoal">My Summaries</h1>
                     <p className="text-gray-500 mt-1">Organize and manage your research library</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -230,7 +239,7 @@ export const MyPapers: React.FC = () => {
                     {/* View Toggle */}
                     <div className="flex items-center bg-gray-100 rounded-lg p-1">
                         <button
-                            onClick={() => setViewMode('grid')}
+                            onClick={() => handleViewModeChange('grid')}
                             className={`p-2 rounded-md transition-colors ${viewMode === 'grid'
                                 ? 'bg-white text-sage shadow-sm'
                                 : 'text-gray-500 hover:text-gray-700'
@@ -240,7 +249,7 @@ export const MyPapers: React.FC = () => {
                             <LayoutGrid size={18} />
                         </button>
                         <button
-                            onClick={() => setViewMode('list')}
+                            onClick={() => handleViewModeChange('list')}
                             className={`p-2 rounded-md transition-colors ${viewMode === 'list'
                                 ? 'bg-white text-sage shadow-sm'
                                 : 'text-gray-500 hover:text-gray-700'

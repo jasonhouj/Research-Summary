@@ -9,6 +9,8 @@ import { MyPapers } from './pages/MyPapers';
 import { ResetPassword } from './pages/ResetPassword';
 import { Settings } from './pages/Settings';
 import { LandingPage } from './pages/LandingPage';
+import { SearchPapers } from './pages/SearchPapers';
+import { SavedPapers } from './pages/SavedPapers';
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -93,7 +95,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/saved" element={
         <ProtectedRoute>
           <Layout>
-            <div className="text-center py-20 text-gray-400">Saved Summaries Placeholder</div>
+            <SavedPapers />
           </Layout>
         </ProtectedRoute>
       } />
@@ -102,6 +104,13 @@ const AppRoutes: React.FC = () => {
         <ProtectedRoute>
           <Layout>
             <Settings />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/search" element={
+        <ProtectedRoute>
+          <Layout>
+            <SearchPapers />
           </Layout>
         </ProtectedRoute>
       } />

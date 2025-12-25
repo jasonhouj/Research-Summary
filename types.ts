@@ -99,3 +99,27 @@ export interface NavItem {
   path: string;
   icon: React.ElementType;
 }
+
+export interface SavedPaperCategory {
+  id: string;
+  user_id: string;
+  name: string;
+  color: FolderColor;
+  created_at: string;
+}
+
+export interface SavedPaper {
+  id: string;
+  user_id: string;
+  category_id?: string | null;
+  openalex_id: string;
+  title: string;
+  authors: string[];
+  abstract: string;
+  url: string;
+  source: string;
+  published_date?: string;
+  doi?: string;
+  citation_count?: number;
+  saved_at: string;
+}
